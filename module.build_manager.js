@@ -41,6 +41,13 @@ runExtension: function (spawn) {
             [ 0, -1 ], [ -1, 0 ], [ 1, 0 ], [ 0, 1 ], [ -2, 0 ],
             [ 0, -2 ], [ 0 , 2 ], [2, 0 ], [ 0, -3 ], [ 0 , 3 ]
         ];
+    } else if (rcl === 4) {
+        extensionOffsets = [
+            [ 0, -1 ], [ -1, 0 ], [ 1, 0 ], [ 0, 1 ], [ -2, 0 ],
+            [ 0, -2 ], [ 0 , 2 ], [2, 0 ], [ 0, -3 ], [ 0 , 3 ],
+            [ 3, 0 ], [ -3 , 0], [4, 0 ], [ -4, 0 ], [ 0 , 4 ],
+            [ 0, 4 ], [ 1 , 4], [-1, 4 ], [ 4, 1 ], [ 4 , -1 ],
+        ];
     } else {
         extensionOffsets = [];
     }
@@ -189,74 +196,72 @@ runExtension: function (spawn) {
 
     runContainer: function (spawn) {
         const room = spawn.room;
-        // sources
-        for (let source of room.find(FIND_SOURCES)) {
-            let nearContainers = room.find(FIND_STRUCTURES, {
-                filter: s =>
-                    s.structureType === STRUCTURE_CONTAINER &&
-                    s.pos.getRangeTo(source) <= 1
-            });
-            let nearSites = room.find(FIND_CONSTRUCTION_SITES, {
-                filter: s =>
-                    s.structureType === STRUCTURE_CONTAINER &&
-                    s.pos.getRangeTo(source) <= 1
-            });
-            if (nearContainers.length === 0 && nearSites.length === 0) {
-                for (let dx = -1; dx <= 1; dx++) {
-                    for (let dy = -1; dy <= 1; dy++) {
-                        if (dx === 0 && dy === 0) continue;
-                        let x = source.pos.x + dx;
-                        let y = source.pos.y + dy;
-                        if (x < 1 || x > 48 || y < 1 || y > 48) continue;
-                        const terrain = room.getTerrain();
-                        if (terrain.get(x, y) === 'wall') continue;
-                        const hasStructure = room.lookForAt(LOOK_STRUCTURES, x, y).length > 0;
-                        const hasSite = room.lookForAt(LOOK_CONSTRUCTION_SITES, x, y).length > 0;
-                        const hasRuin = room.lookForAt(LOOK_RUINS, x, y).length > 0;
-                        if (hasStructure || hasSite || hasRuin) continue;
-                        let result = room.createConstructionSite(x, y, STRUCTURE_CONTAINER);
-                        if (result === OK) {
-                            console.log('Container construction site placed at', x, y);
-                            return;
-                        }
-                    }
-                }
+        const rcl = room.controller.level;
+        const maxContainers = 5;
+    
+        let containerCount =
+            room.find(FIND_STRUCTURES, { filter: s => s.structureType === STRUCTURE_CONTAINER }).length +
+            room.find(FIND_CONSTRUCTION_SITES, { filter: s => s.structureType === STRUCTURE_CONTAINER }).length;
+    
+        if (containerCount >= maxContainers) return;
+    
+        let sources = room.find(FIND_SOURCES);
+        let ctrl = room.controller;
+    
+        let targetOrder = [];
+    
+        // RC2 : 1 container par source
+        if (rcl === 2) {
+            for (let source of sources) {
+                targetOrder.push({ type: 'source', object: source, order: 1 });
             }
         }
-        // controller
-        const ctrl = room.controller;
-        let ctrlContainers = room.find(FIND_STRUCTURES, {
-            filter: s =>
-                s.structureType === STRUCTURE_CONTAINER &&
-                s.pos.getRangeTo(ctrl) <= 1
-        });
-        let ctrlSites = room.find(FIND_CONSTRUCTION_SITES, {
-            filter: s =>
-                s.structureType === STRUCTURE_CONTAINER &&
-                s.pos.getRangeTo(ctrl) <= 1
-        });
-        if (ctrlContainers.length === 0 && ctrlSites.length === 0) {
-            for (let dx = -1; dx <= 1; dx++) {
-                for (let dy = -1; dy <= 1; dy++) {
+        // RC3+ : 1 container par source, puis 1 controller, puis 2e par source (jusqu'à 5)
+        else if (rcl >= 3) {
+            for (let source of sources) {
+                targetOrder.push({ type: 'source', object: source, order: 1 });
+            }
+            targetOrder.push({ type: 'controller', object: ctrl, order: 1 });
+            for (let source of sources) {
+                targetOrder.push({ type: 'source', object: source, order: 2 });
+            }
+        }
+    
+        // On pose UN SEUL container par tick pour éviter le spam
+        for (let tgt of targetOrder) {
+            if (containerCount >= maxContainers) break;
+            let pos = tgt.object.pos;
+            let found = false;
+            for (let dx = -1; dx <= 1 && !found; dx++) {
+                for (let dy = -1; dy <= 1 && !found; dy++) {
                     if (dx === 0 && dy === 0) continue;
-                    let x = ctrl.pos.x + dx;
-                    let y = ctrl.pos.y + dy;
+                    let x = pos.x + dx, y = pos.y + dy;
                     if (x < 1 || x > 48 || y < 1 || y > 48) continue;
-                    const terrain = room.getTerrain();
-                    if (terrain.get(x, y) === 'wall') continue;
-                    const hasStructure = room.lookForAt(LOOK_STRUCTURES, x, y).length > 0;
-                    const hasSite = room.lookForAt(LOOK_CONSTRUCTION_SITES, x, y).length > 0;
-                    const hasRuin = room.lookForAt(LOOK_RUINS, x, y).length > 0;
-                    if (hasStructure || hasSite || hasRuin) continue;
+                    if (room.getTerrain().get(x, y) !== 0) continue;
+                    let hasContainer = room.lookForAt(LOOK_STRUCTURES, x, y)
+                        .some(s => s.structureType === STRUCTURE_CONTAINER);
+                    let hasSite = room.lookForAt(LOOK_CONSTRUCTION_SITES, x, y)
+                        .some(s => s.structureType === STRUCTURE_CONTAINER);
+                    if (hasContainer || hasSite) continue;
+    
+                    // Nettoyage route/site parasite
+                    let structures = room.lookForAt(LOOK_STRUCTURES, x, y);
+                    for (let s of structures) if (s.structureType === STRUCTURE_ROAD) s.destroy();
+                    let sites = room.lookForAt(LOOK_CONSTRUCTION_SITES, x, y);
+                    for (let site of sites) if (site.structureType !== STRUCTURE_CONTAINER) site.remove();
+    
                     let result = room.createConstructionSite(x, y, STRUCTURE_CONTAINER);
                     if (result === OK) {
-                        console.log('Container construction site placed at', x, y, 'for controller');
-                        return;
+                        containerCount++;
+                        found = true;
+                        console.log('[CONTAINER] Posé à', x, y, '(type:', tgt.type, 'ordre:', tgt.order, ')');
                     }
                 }
             }
         }
     },
+
+
 
     runRampart: function (spawn) {
         const room = spawn.room;

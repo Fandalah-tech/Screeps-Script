@@ -4,9 +4,9 @@ module.exports = {
         if (Game.time % 5 !== 0) return;
 
         let taskCounts = {};
-        let allTasks = ['harvest', 'deposit', 'build', 'repair', 'transfer', 'upgrade', null];
+        let allTasks = ['harvest', 'deposit', 'build', 'repair', 'transfer', 'upgrade', 'idle'];
         for (let t of allTasks) {
-            taskCounts[t === null ? 'idle' : t] = _.sum(Game.creeps, c => c.memory.task === t && c.room.name === room.name);
+            taskCounts[t] = _.sum(Game.creeps, c => c.memory.task === t && c.room.name === room.name);
         }
         let ctrl = room.controller;
         let rcPct = ((ctrl.progress / ctrl.progressTotal) * 100).toFixed(1);

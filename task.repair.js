@@ -1,93 +1,64 @@
-const WALL_REMPART_REPAIR_CAP = 10000;
+const WALL_REMPART_REPAIR_CAP = 10000;    // HP max pour un rampart neuf/à boost
+const WALL_REMPART_MAINTAIN_MIN = 2000;   // Seuil de maintenance courant
 
-var Repair = {
+module.exports = {
     run: function(creep) {
-        // Si plus d'énergie, stoppe la tâche repair
-        if (creep.store[RESOURCE_ENERGY] === 0) {
-            creep.memory.task = null;
-            creep.memory.repairTargetId = null;
-            return;
-        }
-
-        // Recherche d'une cible à réparer si besoin
+        // 1. Si pas de cible mémorisée ou cible invalide, cherche-en une nouvelle
         if (!creep.memory.repairTargetId) {
             let targets = creep.room.find(FIND_STRUCTURES, {
                 filter: (structure) => {
+                    // 1. Priorité : routes ou containers très abîmés (< 50%)
                     if (structure.structureType === STRUCTURE_ROAD || structure.structureType === STRUCTURE_CONTAINER) {
                         return structure.hits < structure.hitsMax * 0.5;
                     }
-                    if (structure.structureType === STRUCTURE_WALL || structure.structureType === STRUCTURE_RAMPART) {
-                        return structure.hits < WALL_REMPART_REPAIR_CAP;
+                    // 2. Ramparts/Walls : maintenance seulement sous le seuil critique
+                    if (structure.structureType === STRUCTURE_RAMPART || structure.structureType === STRUCTURE_WALL) {
+                        // Si tout neuf (< 10k ou < 20% max), on boost
+                        if (structure.hits < WALL_REMPART_REPAIR_CAP && structure.hits < structure.hitsMax * 0.2) return true;
+                        // Sinon, seulement si descend sous le seuil maintenance
+                        if (structure.hits < WALL_REMPART_MAINTAIN_MIN) return true;
+                        // Sinon, non prioritaire
+                        return false;
                     }
+                    // 3. Ajoute d'autres structures si besoin (tower, etc.)
                     return false;
                 }
             });
 
+            // Sélectionne la structure la plus abîmée
             if (targets.length > 0) {
-                let target = _.min(targets, s => s.hits);
+                let target = _.min(targets, t => t.hits / t.hitsMax);
                 creep.memory.repairTargetId = target.id;
             } else {
-                // PATCH : plus rien à réparer, repasse en tâche nulle
-                creep.memory.task = null;
                 creep.memory.repairTargetId = null;
+                creep.memory.task = 'idle'; // Plus rien à réparer
                 return;
             }
         }
 
-        // Récupère la cible
+        // 2. Action de repair
         let target = Game.getObjectById(creep.memory.repairTargetId);
-
-        // Vérifie si la cible est toujours valide
-        if (
-            !target ||
-            target.hits === undefined ||
-            target.hits === target.hitsMax ||
-            (
-                (target.structureType === STRUCTURE_WALL || target.structureType === STRUCTURE_RAMPART) &&
-                target.hits >= WALL_REMPART_REPAIR_CAP
-            )
-        ) {
-            // PATCH : la cible n'est plus valable, reset la tâche
-            creep.memory.repairTargetId = null;
-            creep.memory.task = null;
+        if (!target) {
+            creep.memory.repairTargetId = null; // Cible disparue
+            creep.memory.task = 'idle';
             return;
         }
 
-        // Répare ou se déplace
-        let repairResult = creep.repair(target);
-        if (repairResult === ERR_INVALID_TARGET) {
+        // Si la cible est déjà réparée, on cherche une nouvelle tâche au prochain tick
+        if (target.hits >= target.hitsMax ||
+            (target.structureType === STRUCTURE_RAMPART || target.structureType === STRUCTURE_WALL) && 
+                target.hits >= WALL_REMPART_REPAIR_CAP) {
             creep.memory.repairTargetId = null;
-            creep.memory.task = null;
+            creep.memory.task = 'idle';
             return;
         }
-        if (repairResult === ERR_NOT_IN_RANGE) {
-            let moveResult = creep.moveTo(target, {visualizePathStyle: {stroke: '#a9a9a9'}});
-            // Détection simple de blocage sur la route
-            if (!creep.memory.lastRepairPos) creep.memory.lastRepairPos = {};
-            if (!creep.memory.stuckCounter) creep.memory.stuckCounter = 0;
 
-            if (creep.memory.lastRepairPos.x === creep.pos.x &&
-                creep.memory.lastRepairPos.y === creep.pos.y) {
-                creep.memory.stuckCounter++;
-            } else {
-                creep.memory.stuckCounter = 0;
-            }
-            creep.memory.lastRepairPos = {x: creep.pos.x, y: creep.pos.y};
-
-            if (creep.memory.stuckCounter > 5) {
-                creep.memory.repairTargetId = null;
-                creep.memory.task = null;
-                creep.memory.stuckCounter = 0;
-                return;
-            }
+        // Déplacement et repair
+        if (creep.pos.inRangeTo(target, 3)) {
+            creep.say('repair');
+            creep.repair(target);
         } else {
-            creep.memory.stuckCounter = 0;
-        }
-        
-        if (repairResult === OK) {
-        creep.say('repair');
+            creep.moveTo(target, { visualizePathStyle: { stroke: '#ffaa00' } });
         }
     }
 };
-
-module.exports = Repair;

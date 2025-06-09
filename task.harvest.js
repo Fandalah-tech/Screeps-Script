@@ -19,7 +19,7 @@ var Harvest = {
         if (!creep.memory.workingSourceId) {
             if (sources.length === 0) {
                 //console.log('[HARVEST DEBUG]', creep.name, '| NO SOURCES in room:', creep.room.name);
-                creep.memory.task = null;
+                creep.memory.task = 'idle';
                 return;
             }
             let bestSource = null;

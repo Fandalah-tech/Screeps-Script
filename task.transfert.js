@@ -2,13 +2,13 @@ var Transfer = {
     run: function(creep) {
         // Si une tâche prioritaire apparaît, abandonner la tâche courante et repasser par le dispatch
         if (require('role.worker').needDeposit(creep.room)) {
-            creep.memory.task = null;
+            creep.memory.task = 'idle';
             creep.memory.transferTargetId = null; // Nettoyage de la cible
             return;
         }
 
         if (creep.store[RESOURCE_ENERGY] === 0) {
-            creep.memory.task = null;
+            creep.memory.task = 'idle';
             creep.memory.transferTargetId = null; // Nettoyage de la cible
             return;
         }
@@ -25,7 +25,7 @@ var Transfer = {
                 creep.say('transfer');
             }
         } else {
-            creep.memory.transferTargetId = null; // Nettoyage si pas de cible
+            creep.memory.task = 'idle'; // Nettoyage si pas de cible
         }
     }
 };

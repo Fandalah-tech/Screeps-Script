@@ -22,10 +22,10 @@ const tower_manager = {
                     tower.heal(injured);
                     continue;
                 }
-                // 3. Réparation (hors murs/ramparts)
+                // 3. Réparation SEUIL + pas murs/ramparts
                 const toRepair = tower.pos.findClosestByRange(FIND_STRUCTURES, {
                     filter: s =>
-                        s.hits < s.hitsMax &&
+                        s.hits < s.hitsMax * 0.4 && // NE répare QUE sous 40 %
                         s.structureType !== STRUCTURE_WALL &&
                         s.structureType !== STRUCTURE_RAMPART
                 });

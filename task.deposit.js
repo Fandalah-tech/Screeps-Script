@@ -5,7 +5,7 @@ var Deposit = {
     /** @param {Creep} creep **/
     run: function(creep) {
         if (creep.store[RESOURCE_ENERGY] == 0) {
-            creep.memory.task = null;
+            creep.memory.task = 'idle';
             creep.memory.depositTargetId = null; // Nettoyage de la cible
             return;
         }
@@ -28,7 +28,7 @@ var Deposit = {
             }
         } else {
             // Plus rien à déposer, on laisse le dispatch ré-attribuer une tâche prioritaire
-            creep.memory.task = null;
+            creep.memory.task = 'idle';
             creep.memory.depositTargetId = null;
             return;
         }

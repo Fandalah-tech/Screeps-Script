@@ -69,7 +69,12 @@ module.exports.loop = function () {
     for (let name in Game.creeps) {
         let creep = Game.creeps[name];
         if (creep.memory.role === 'worker') {
-            Worker.run(creep);
+            // SEULEMENT réattribuer une tâche SI la tâche actuelle est finie/invalide
+            if (!Worker.isTaskValid(creep)) {
+                //console.log('[LOOP]', creep.name, creep.memory.task, creep.store[RESOURCE_ENERGY]);
+                Worker.run(creep);
+            }
+            Worker.dispatch(creep);
         }
     }
 
@@ -84,11 +89,26 @@ module.exports.loop = function () {
     for (let roomName in Game.rooms) {
         let room = Game.rooms[roomName];
         console_log.logRoomStatus(room);      // log synthétique
-        console_log.logTaskDetails(room);     // log détaillé (tous les 5 ticks)
+        //console_log.logTaskDetails(room);     // log détaillé (tous les 5 ticks)
     }
     
     stats_benchmark.run(room);
     // pour afficher console.log(JSON.stringify(Memory.benchmarks, null, 2))
     // pour supprimer delete Memory.benchmarks
+    
+    // Initialisation des stats si nécessaire
+    if (!Memory.stats) Memory.stats = {};
+    if (!Memory.stats.idleHistory) Memory.stats.idleHistory = [];
+    
+    // Comptage des creeps idle ce tick
+    let idleCount = _.sum(Game.creeps, c => !c.memory.task || c.memory.task === 'idle');
+    Memory.stats.idleHistory.push(idleCount);
+    if (Memory.stats.idleHistory.length > 150) Memory.stats.idleHistory.shift();
+    
+    if (Game.time % 20 === 0) {
+        let h = Memory.stats.idleHistory;
+        let avgIdle = h.reduce((a, b) => a + b, 0) / h.length;
+        console.log('Idle creeps (avg over', h.length, 'ticks):', avgIdle.toFixed(2));
+    }
 
 };

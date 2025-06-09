@@ -2,18 +2,19 @@ var Build = {
     run: function(creep) {
         // Si le creep n'a plus d'énergie, il arrête la tâche
         if (creep.store[RESOURCE_ENERGY] === 0) {
-            creep.memory.task = null;
+            creep.memory.task = 'idle';
             creep.memory.buildTargetId = null; // Nettoyage de la cible
             return;
         }
 
-        // Ordre de priorité : Rampart > Tower > Extension > Road > Container
+        // Ordre de priorité : Rampart > Tower > Extension > Road > Container > Wall
         let priorities = [
             STRUCTURE_RAMPART,
             STRUCTURE_TOWER,
             STRUCTURE_EXTENSION,
             STRUCTURE_ROAD,
-            STRUCTURE_CONTAINER
+            STRUCTURE_CONTAINER,
+            STRUCTURE_WALL
         ];
 
         let foundSite = false;
@@ -37,11 +38,11 @@ var Build = {
             }
         }
 
-        // Si aucun chantier valide trouvé, reset la mémoire de la cible
+        // Si aucun chantier valide trouvé, reset la mémoire et la tâche
         if (!foundSite) {
             creep.memory.buildTargetId = null;
+            creep.memory.task = 'idle';
         }
-        // NE PAS remettre la tâche à null ici, le dispatch s'en charge si besoin
     }
 };
 
