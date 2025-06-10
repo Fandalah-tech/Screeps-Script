@@ -1,6 +1,9 @@
 // module.build_manager.js
 // Automatise le placement des extensions, routes, containers, ramparts, tower.
 
+const { LAYOUT } = require('module.plan_base');
+
+
 function buildRoadAround(room, center) {
     const roomName = center.pos.roomName;
     const terrain = new Room.Terrain(roomName);
@@ -26,173 +29,126 @@ function buildRoadAround(room, center) {
     }
 }
 
+function getDonutCostMatrix(spawn) {
+    let costs = new PathFinder.CostMatrix();
+    for (let dx = -3; dx <= 3; dx++) {
+        for (let dy = -3; dy <= 3; dy++) {
+            let x = spawn.pos.x + dx, y = spawn.pos.y + dy;
+            // Est-ce un corridor/route dans ton layout ?
+            let isCorridor = LAYOUT.some(([lx, ly, type]) =>
+                lx === dx && ly === dy && type === "route"
+            );
+            if (!isCorridor) {
+                costs.set(x, y, 255); // cœur interdit
+            }
+        }
+    }
+    return costs;
+}
+
 const build_manager = {
-
-runExtension: function (spawn) {
-    const room = spawn.room;
-    const rcl = room.controller.level;
-    let extensionOffsets;
-    if (rcl === 2) {
-        extensionOffsets = [
-            [ 0, -1 ], [ -1, 0 ], [ 1, 0 ], [ 0, 1 ], [ -2, 0 ]
-        ];
-    } else if (rcl === 3) {
-        extensionOffsets = [
-            [ 0, -1 ], [ -1, 0 ], [ 1, 0 ], [ 0, 1 ], [ -2, 0 ],
-            [ 0, -2 ], [ 0 , 2 ], [2, 0 ], [ 0, -3 ], [ 0 , 3 ]
-        ];
-    } else if (rcl === 4) {
-        extensionOffsets = [
-            [ 0, -1 ], [ -1, 0 ], [ 1, 0 ], [ 0, 1 ], [ -2, 0 ],
-            [ 0, -2 ], [ 0 , 2 ], [2, 0 ], [ 0, -3 ], [ 0 , 3 ],
-            [ 3, 0 ], [ -3 , 0], [4, 0 ], [ -4, 0 ], [ 0 , 4 ],
-            [ 0, 4 ], [ 1 , 4], [-1, 4 ], [ 4, 1 ], [ 4 , -1 ],
-        ];
-    } else {
-        extensionOffsets = [];
-    }
-    for (const [dx, dy] of extensionOffsets) {
-        const x = spawn.pos.x + dx;
-        const y = spawn.pos.y + dy;
-        if (x < 1 || x > 48 || y < 1 || y > 48) continue;
-        const terrain = room.getTerrain();
-        if (terrain.get(x, y) === 'wall') continue;
-
-        // *** AJOUT CRUCIAL ICI ***
-        // Détruit toute route présente à l'emplacement
-        let structures = room.lookForAt(LOOK_STRUCTURES, x, y);
-        for (let s of structures) {
-            if (s.structureType === STRUCTURE_ROAD) {
-                s.destroy();
-            }
-        }
-
-        // Détruit tout site de construction parasite (autre que extension)
-        let sites = room.lookForAt(LOOK_CONSTRUCTION_SITES, x, y);
-        for (let site of sites) {
-            if (site.structureType !== STRUCTURE_EXTENSION) {
-                site.remove();
-            }
-        }
-
-        // *** FIN DU PATCH ***
-
-        const hasStructure = room.lookForAt(LOOK_STRUCTURES, x, y).length > 0;
-        const hasAnySite = room.lookForAt(LOOK_CONSTRUCTION_SITES, x, y).length > 0;
-        if (hasStructure || hasAnySite) continue;
-        let result = room.createConstructionSite(x, y, STRUCTURE_EXTENSION);
-        if (result === OK) {
-            console.log('Extension construction site placed at', x, y);
-            break;
-        }
-    }
-},
 
     runRoads: function (spawn) {
         const room = spawn.room;
+        const terrain = room.getTerrain();
         let sources = room.find(FIND_SOURCES);
-
-        // --- spawn -> controller
-        let pathCtrl = PathFinder.search(
-            spawn.pos, 
-            {pos: room.controller.pos, range: 1},
-            {
-                plainCost: 2,
-                swampCost: 2,
-                roomCallback: function(roomName) {
-                    let costs = new PathFinder.CostMatrix;
-                    // Custom exclusions si besoin
-                    return costs;
+    
+        // Liste des "portes" de sortie de ta base (corridors)
+        const ROUTE_EXITS = [
+            [-3, 3], [-3, -3], [3, 3], [3, -3]
+        ];
+        const routeExits = ROUTE_EXITS.map(([dx, dy]) => 
+            new RoomPosition(spawn.pos.x + dx, spawn.pos.y + dy, spawn.room.name)
+        );
+    
+        // Cibles vers lesquelles on veut une route principale
+        const targets = [room.controller, ...sources];
+    
+        // Helper pour trouver la porte la plus proche d'une cible
+        function closestRouteExit(routeExits, targetPos) {
+            let min = null, minDist = Infinity;
+            for (let pos of routeExits) {
+                let dist = Math.abs(pos.x - targetPos.x) + Math.abs(pos.y - targetPos.y);
+                if (dist < minDist) {
+                    minDist = dist;
+                    min = pos;
                 }
             }
-        ).path;
-
-        for (let pos of pathCtrl) {
-            let structures = room.lookForAt(LOOK_STRUCTURES, pos.x, pos.y);
-            let hasBlockingStructure = structures.some(s => s.structureType !== STRUCTURE_ROAD);
-            let hasRoad = structures.some(s => s.structureType === STRUCTURE_ROAD);
-
-            let constructionSites = room.lookForAt(LOOK_CONSTRUCTION_SITES, pos.x, pos.y);
-            let hasSite = constructionSites.some(s => s.structureType === STRUCTURE_ROAD);
-            let hasBlockingSite = constructionSites.some(s => s.structureType !== STRUCTURE_ROAD);
-
-            let hasRuin = room.lookForAt(LOOK_RUINS, pos.x, pos.y).length > 0;
-
-            if (!hasRoad && !hasSite && !hasRuin && !hasBlockingStructure && !hasBlockingSite) {
-                room.createConstructionSite(pos.x, pos.y, STRUCTURE_ROAD);
-            }
+            return min;
         }
-
-        // --- spawn -> sources
-        for (let source of sources) {
-            let pathSrc = PathFinder.search(
-                spawn.pos, 
-                {pos: source.pos, range: 1},
+    
+        // Pour chaque cible, trace une route depuis la "porte" la plus proche
+        for (let target of targets) {
+            let exit = closestRouteExit(routeExits, target.pos);
+            let path = PathFinder.search(exit, {pos: target.pos, range: 1},
                 {
                     plainCost: 2,
-                    swampCost: 2,
+                    swampCost: 5,
                     roomCallback: function(roomName) {
                         let costs = new PathFinder.CostMatrix;
                         return costs;
                     }
                 }
             ).path;
-
-            for (let pos of pathSrc) {
+    
+            for (let pos of path) {
                 let structures = room.lookForAt(LOOK_STRUCTURES, pos.x, pos.y);
                 let hasBlockingStructure = structures.some(s => s.structureType !== STRUCTURE_ROAD);
                 let hasRoad = structures.some(s => s.structureType === STRUCTURE_ROAD);
-
+    
                 let constructionSites = room.lookForAt(LOOK_CONSTRUCTION_SITES, pos.x, pos.y);
                 let hasSite = constructionSites.some(s => s.structureType === STRUCTURE_ROAD);
                 let hasBlockingSite = constructionSites.some(s => s.structureType !== STRUCTURE_ROAD);
-
+    
                 let hasRuin = room.lookForAt(LOOK_RUINS, pos.x, pos.y).length > 0;
-
+    
                 if (!hasRoad && !hasSite && !hasRuin && !hasBlockingStructure && !hasBlockingSite) {
                     room.createConstructionSite(pos.x, pos.y, STRUCTURE_ROAD);
                 }
             }
         }
-
-        // --- sources -> controller
-        for (let source of sources) {
-            let pathSrcCtrl = PathFinder.search(
-                source.pos,
-                {pos: room.controller.pos, range: 1},
-                {
-                    plainCost: 2,
-                    swampCost: 2,
-                    roomCallback: function(roomName) {
-                        let costs = new PathFinder.CostMatrix;
-                        return costs;
+        
+            let donutMatrix = getDonutCostMatrix(spawn);
+            
+            for (let source of sources) {
+                let path = PathFinder.search(
+                    source.pos,
+                    {pos: room.controller.pos, range: 1},
+                    {
+                        plainCost: 2,
+                        swampCost: 5,
+                        roomCallback: function(roomName) {
+                            if (roomName === room.name) return donutMatrix;
+                            return false;
+                        }
                     }
-                }
-            ).path;
-
-            for (let pos of pathSrcCtrl) {
+                ).path;
+        
+            for (let pos of path) {
                 let structures = room.lookForAt(LOOK_STRUCTURES, pos.x, pos.y);
                 let hasBlockingStructure = structures.some(s => s.structureType !== STRUCTURE_ROAD);
                 let hasRoad = structures.some(s => s.structureType === STRUCTURE_ROAD);
-
+        
                 let constructionSites = room.lookForAt(LOOK_CONSTRUCTION_SITES, pos.x, pos.y);
                 let hasSite = constructionSites.some(s => s.structureType === STRUCTURE_ROAD);
                 let hasBlockingSite = constructionSites.some(s => s.structureType !== STRUCTURE_ROAD);
-
+        
                 let hasRuin = room.lookForAt(LOOK_RUINS, pos.x, pos.y).length > 0;
-
+        
                 if (!hasRoad && !hasSite && !hasRuin && !hasBlockingStructure && !hasBlockingSite) {
                     room.createConstructionSite(pos.x, pos.y, STRUCTURE_ROAD);
                 }
             }
-        }
-
-        // --- Pave autour du controller et de chaque source
+        }  
+        
+    
+        // --- Optionnel : pave autour du controller et des sources
         buildRoadAround(room, room.controller);
         for (const source of sources) {
             buildRoadAround(room, source);
         }
     },
+
 
     runContainer: function (spawn) {
         const room = spawn.room;
@@ -261,8 +217,6 @@ runExtension: function (spawn) {
         }
     },
 
-
-
     runRampart: function (spawn) {
         const room = spawn.room;
         const rcl = room.controller.level;
@@ -328,29 +282,6 @@ runExtension: function (spawn) {
             }
         }
     },
-
-    runTower: function (spawn) {
-        const room = spawn.room;
-        const rcl = room.controller.level;
-        if (rcl < 3) return;
-        let hasTower = room.find(FIND_STRUCTURES, {filter: s => s.structureType === STRUCTURE_TOWER}).length > 0;
-        let hasSite = room.find(FIND_CONSTRUCTION_SITES, {filter: s => s.structureType === STRUCTURE_TOWER}).length > 0;
-        let hasRuin = room.find(FIND_RUINS, {filter: r => r.structure.structureType === STRUCTURE_TOWER}).length > 0;
-        if (hasTower || hasSite || hasRuin) return;
-        let x = spawn.pos.x - 2;
-        let y = spawn.pos.y + 2;
-        if (x < 1 || x > 48 || y < 1 || y > 48) return;
-        const terrain = room.getTerrain();
-        if (terrain.get(x, y) === 'wall') return;
-        let hasStructure = room.lookForAt(LOOK_STRUCTURES, x, y).length > 0;
-        let hasConstruction = room.lookForAt(LOOK_CONSTRUCTION_SITES, x, y).length > 0;
-        let hasRuins = room.lookForAt(LOOK_RUINS, x, y).length > 0;
-        if (hasStructure || hasConstruction || hasRuins) return;
-        let result = room.createConstructionSite(x, y, STRUCTURE_TOWER);
-        if (result === OK) {
-            console.log('Tower construction site placed at', x, y);
-        }
-    }
 };
 
 module.exports = build_manager;

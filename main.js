@@ -4,6 +4,7 @@ const build_manager  = require('module.build_manager');
 const tower_manager  = require('module.tower_manager');
 const console_log    = require('module.console_log');
 const stats_benchmark    = require('stats_benchmark');
+const { planBase } = require('module.plan_base');
 
 
 // === ID UNIQUE WORKER (si jamais le compteur n'existe pas encore)
@@ -42,6 +43,7 @@ module.exports.loop = function () {
         }
         spawn = spawns[0];
     }
+    
     const room = spawn.room;
 
     // 3. Calcul nombre de workers souhaité
@@ -79,11 +81,13 @@ module.exports.loop = function () {
     }
 
     // 6. Build auto
-    if (build_manager && build_manager.runExtension) build_manager.runExtension(spawn);
+    planBase(Game.spawns['Spawn1']);
+    
+    //if (build_manager && build_manager.runExtension) build_manager.runExtension(spawn);
     if (build_manager && build_manager.runRoads) build_manager.runRoads(spawn);
     if (build_manager && build_manager.runContainer) build_manager.runContainer(spawn);
     if (build_manager && build_manager.runRampart) build_manager.runRampart(spawn);
-    if (build_manager && build_manager.runTower) build_manager.runTower(spawn);
+    // if (build_manager && build_manager.runTower) build_manager.runTower(spawn);
 
     // 7. LOGS (Room + Creeps, 1 tick sur 5 pour les creeps si trop verbeux)
     for (let roomName in Game.rooms) {
