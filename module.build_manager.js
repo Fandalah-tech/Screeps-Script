@@ -39,7 +39,9 @@ function buildRoadAround(room, center) {
             let hasSite = room.lookForAt(LOOK_CONSTRUCTION_SITES, x, y).some(s => s.structureType === STRUCTURE_ROAD);
             let hasRuin = room.lookForAt(LOOK_RUINS, x, y).some(r => r.structure.structureType === STRUCTURE_ROAD);
             if (!hasRoad && !hasSite && !hasRuin) {
+                if (isConnectedToRoad(room, x, y)) {
                 room.createConstructionSite(x, y, STRUCTURE_ROAD);
+                }
             }
         }
     }
@@ -60,6 +62,22 @@ function getDonutCostMatrix(spawn) {
     }
     return costs;
 }
+
+function isConnectedToRoad(room, x, y) {
+    // Renvoie true si au moins une des 8 cases autour de (x, y) contient une route (ou site de route)
+    for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+            if (dx === 0 && dy === 0) continue;
+            let tx = x + dx, ty = y + dy;
+            if (tx < 1 || tx > 48 || ty < 1 || ty > 48) continue;
+            let hasRoad = room.lookForAt(LOOK_STRUCTURES, tx, ty).some(s => s.structureType === STRUCTURE_ROAD);
+            let hasRoadSite = room.lookForAt(LOOK_CONSTRUCTION_SITES, tx, ty).some(s => s.structureType === STRUCTURE_ROAD);
+            if (hasRoad || hasRoadSite) return true;
+        }
+    }
+    return false;
+}
+
 
 const build_manager = {
 
@@ -97,7 +115,7 @@ const build_manager = {
             let path = PathFinder.search(exit, {pos: target.pos, range: 1},
                 {
                     plainCost: 2,
-                    swampCost: 5,
+                    swampCost: 2, //pour ignorer le fait que ce sont des swamps car on va construire dessus
                     roomCallback: function(roomName) {
                         let costs = new PathFinder.CostMatrix;
                         return costs;
@@ -123,7 +141,9 @@ const build_manager = {
                 let hasRuin = room.lookForAt(LOOK_RUINS, pos.x, pos.y).some(r => r.structure.structureType === STRUCTURE_ROAD);
 
                 if (!hasRoad && !hasSite && !hasRuin) {
+                    if (isConnectedToRoad(room, pos.x, pos.y)) {
                     room.createConstructionSite(pos.x, pos.y, STRUCTURE_ROAD);
+                    }
                 }
             }
         }
@@ -136,7 +156,7 @@ const build_manager = {
                 {pos: room.controller.pos, range: 1},
                 {
                     plainCost: 2,
-                    swampCost: 5,
+                    swampCost: 2, //pour ignorer le fait que ce sont des swamps car on va construire dessus
                     roomCallback: function(roomName) {
                         if (roomName === room.name) return donutMatrix;
                         return false;
@@ -162,7 +182,9 @@ const build_manager = {
                 let hasRuin = room.lookForAt(LOOK_RUINS, pos.x, pos.y).some(r => r.structure.structureType === STRUCTURE_ROAD);
 
                 if (!hasRoad && !hasSite && !hasRuin) {
+                    if (isConnectedToRoad(room, pos.x, pos.y)) {
                     room.createConstructionSite(pos.x, pos.y, STRUCTURE_ROAD);
+                    }
                 }
             }
         }
@@ -191,18 +213,12 @@ const build_manager = {
 
         let targetOrder = [];
 
-        if (rcl === 2) {
+        if (rcl >= 2) {
             for (let source of sources) {
                 targetOrder.push({ type: 'source', object: source, order: 1 });
             }
         } else if (rcl >= 3) {
-            for (let source of sources) {
-                targetOrder.push({ type: 'source', object: source, order: 1 });
-            }
             targetOrder.push({ type: 'controller', object: ctrl, order: 1 });
-            for (let source of sources) {
-                targetOrder.push({ type: 'source', object: source, order: 2 });
-            }
         }
 
         for (let tgt of targetOrder) {
@@ -284,7 +300,9 @@ const build_manager = {
                     ) {
                         delete Memory.promisedContainers[key];
                     }
-        
+                    
+                    if (!isConnectedToRoad(room, x, y)) continue; // On ne pose pas si pas connecté à une route
+                    
                     let result = room.createConstructionSite(x, y, STRUCTURE_CONTAINER);
                     if (result === OK) {
                         containerCount++;
@@ -298,8 +316,71 @@ const build_manager = {
         }
     },
 
+
     runRampart: function (spawn) {
-        // ... (inchangé, tu peux garder ton code d'origine ici)
+        const room = spawn.room;
+        const rcl = room.controller.level;
+        // spawn
+        let hasRampart = room.lookForAt(LOOK_STRUCTURES, spawn.pos.x, spawn.pos.y).some(s => s.structureType === STRUCTURE_RAMPART);
+        let hasSite = room.lookForAt(LOOK_CONSTRUCTION_SITES, spawn.pos.x, spawn.pos.y).some(s => s.structureType === STRUCTURE_RAMPART);
+        let hasRuin = room.lookForAt(LOOK_RUINS, spawn.pos.x, spawn.pos.y).some(r => r.structure.structureType === STRUCTURE_RAMPART);
+        if (!hasRampart && !hasSite && !hasRuin) {
+            let result = room.createConstructionSite(spawn.pos.x, spawn.pos.y, STRUCTURE_RAMPART);
+            if (result === OK) {
+                console.log('Rampart construction site placed on spawn at', spawn.pos.x, spawn.pos.y);
+            }
+        }
+        // towers et containers (RC3+)
+        if (rcl >= 3) {
+            var towers = room.find(FIND_MY_STRUCTURES, {
+                filter: { structureType: STRUCTURE_TOWER }
+            });
+            for (const tower of towers) {
+                let x = tower.pos.x, y = tower.pos.y;
+                let hasRampart = room.lookForAt(LOOK_STRUCTURES, x, y).some(s => s.structureType === STRUCTURE_RAMPART);
+                let hasSite = room.lookForAt(LOOK_CONSTRUCTION_SITES, x, y).some(s => s.structureType === STRUCTURE_RAMPART);
+                let hasRuin = room.lookForAt(LOOK_RUINS, x, y).some(r => r.structure.structureType === STRUCTURE_RAMPART);
+                if (!hasRampart && !hasSite && !hasRuin) {
+                    let result = room.createConstructionSite(x, y, STRUCTURE_RAMPART);
+                    if (result === OK) {
+                        console.log('Rampart construction site placed on tower at', x, y);
+                    }
+                }
+            }
+            var containers = room.find(FIND_STRUCTURES, {
+                filter: { structureType: STRUCTURE_CONTAINER }
+            });
+            for (const container of containers) {
+                let x = container.pos.x, y = container.pos.y;
+                let hasRampart = room.lookForAt(LOOK_STRUCTURES, x, y).some(s => s.structureType === STRUCTURE_RAMPART);
+                let hasSite = room.lookForAt(LOOK_CONSTRUCTION_SITES, x, y).some(s => s.structureType === STRUCTURE_RAMPART);
+                let hasRuin = room.lookForAt(LOOK_RUINS, x, y).some(r => r.structure.structureType === STRUCTURE_RAMPART);
+                if (!hasRampart && !hasSite && !hasRuin) {
+                    let result = room.createConstructionSite(x, y, STRUCTURE_RAMPART);
+                    if (result === OK) {
+                        console.log('Rampart construction site placed on container at', x, y);
+                    }
+                }
+            }
+        }
+        // extensions (RC4+)
+        if (rcl >= 4) {
+            var extensions = room.find(FIND_MY_STRUCTURES, {
+                filter: { structureType: STRUCTURE_EXTENSION }
+            });
+            for (const extension of extensions) {
+                let x = extension.pos.x, y = extension.pos.y;
+                let hasRampart = room.lookForAt(LOOK_STRUCTURES, x, y).some(s => s.structureType === STRUCTURE_RAMPART);
+                let hasSite = room.lookForAt(LOOK_CONSTRUCTION_SITES, x, y).some(s => s.structureType === STRUCTURE_RAMPART);
+                let hasRuin = room.lookForAt(LOOK_RUINS, x, y).some(r => r.structure.structureType === STRUCTURE_RAMPART);
+                if (!hasRampart && !hasSite && !hasRuin) {
+                    let result = room.createConstructionSite(x, y, STRUCTURE_RAMPART);
+                    if (result === OK) {
+                        console.log('Rampart construction site placed on extension at', x, y);
+                    }
+                }
+            }
+        }
     },
 };
 

@@ -1,7 +1,7 @@
 module.exports = {
     logRoomStatus: function(room) {
-        // Affichage global classique
-        if (Game.time % 5 !== 0) return;
+        // Affichage global classique (tous les X ticks)
+        if (Game.time % 1 !== 0) return;
 
         // Liste des rôles utilisés
         let allRoles = ['harvester', 'builder', 'upgrader'];
@@ -11,6 +11,8 @@ module.exports = {
         }
         let ctrl = room.controller;
         let rcPct = ((ctrl.progress / ctrl.progressTotal) * 100).toFixed(1);
+        
+        console.log("***************************************************************************");
 
         console.log(
             `Room ${room.name} | RCL${ctrl.level} (${rcPct}%) | ` +
@@ -20,8 +22,8 @@ module.exports = {
     },
 
     logCreepDetails: function(room) {
-        // Affichage détaillé de chaque creep (tous les 5 ticks)
-        if (Game.time % 5 !== 0) return;
+        // Affichage détaillé de chaque creep (tous les X ticks)
+        if (Game.time % 1 !== 0) return;
 
         for (let name in Game.creeps) {
             let c = Game.creeps[name];
@@ -29,22 +31,47 @@ module.exports = {
             let msg = `[${c.memory.role || 'no-role'}] ${name}`;
 
             if (c.memory.role === 'harvester') {
-                let target = c.pos.findClosestByPath(FIND_SOURCES);
-                if (target) {
-                    msg += ` target source: [${target.pos.x},${target.pos.y}]`;
+                if (c.store.getFreeCapacity(RESOURCE_ENERGY) === 0) {
+                    // Il est plein, il cherche où déposer
+                    // Prio container adjacent
+                    let container = c.pos.findInRange(FIND_STRUCTURES, 1, {
+                        filter: s => s.structureType === STRUCTURE_CONTAINER
+                    })[0];
+                    let target = container;
+                    if (!target) {
+                        // Fallback : extension/spawn à remplir
+                        target = c.room.find(FIND_STRUCTURES, {
+                            filter: s =>
+                                (s.structureType === STRUCTURE_EXTENSION ||
+                                 s.structureType === STRUCTURE_SPAWN) &&
+                                s.store.getFreeCapacity(RESOURCE_ENERGY) > 0
+                        })[0];
+                    }
+                    if (target) {
+                        msg += ` depositing to ${target.structureType}(${target.pos.x},${target.pos.y})`;
+                    } else {
+                        msg += ` depositing: no target`;
+                    }
+                } else {
+                    // Il va miner une source
+                    let target = c.pos.findClosestByPath(FIND_SOURCES);
+                    if (target) {
+                        msg += ` harvest from source(${target.pos.x},${target.pos.y})`;
+                    }
                 }
             }
+
             if (c.memory.role === 'builder') {
                 let target = c.pos.findClosestByPath(FIND_CONSTRUCTION_SITES);
                 if (target) {
-                    msg += ` build site: [${target.pos.x},${target.pos.y}]`;
+                    msg += ` building ${target.structureType}(${target.pos.x},${target.pos.y})`;
                 }
             }
             if (c.memory.role === 'upgrader') {
                 msg += ` upgrading controller`;
             }
 
-            msg += ` ${c.store[RESOURCE_ENERGY]}/${c.store.getCapacity(RESOURCE_ENERGY)}`;
+            msg += `-> ${c.store[RESOURCE_ENERGY]}/${c.store.getCapacity(RESOURCE_ENERGY)}`;
             console.log(msg);
         }
     }
