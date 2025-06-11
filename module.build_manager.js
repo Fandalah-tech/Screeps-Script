@@ -217,7 +217,9 @@ const build_manager = {
             for (let source of sources) {
                 targetOrder.push({ type: 'source', object: source, order: 1 });
             }
-        } else if (rcl >= 3) {
+        }
+        
+        if (rcl >= 3) {
             targetOrder.push({ type: 'controller', object: ctrl, order: 1 });
         }
 
@@ -270,6 +272,9 @@ const build_manager = {
                             s.structureType !== STRUCTURE_WALL &&
                             s.structureType !== STRUCTURE_KEEPER_LAIR
                         ) {
+                            
+                            console.log(`[DEBUG] Après destroy sur (${x},${y}): structures:`, JSON.stringify(room.lookForAt(LOOK_STRUCTURES, x, y).map(s => s.structureType)));
+
                             s.destroy();
                         }
                     }
@@ -303,6 +308,9 @@ const build_manager = {
                     
                     if (!isConnectedToRoad(room, x, y)) continue; // On ne pose pas si pas connecté à une route
                     
+                    
+                    
+                    
                     let result = room.createConstructionSite(x, y, STRUCTURE_CONTAINER);
                     if (result === OK) {
                         containerCount++;
@@ -325,6 +333,7 @@ const build_manager = {
         let hasSite = room.lookForAt(LOOK_CONSTRUCTION_SITES, spawn.pos.x, spawn.pos.y).some(s => s.structureType === STRUCTURE_RAMPART);
         let hasRuin = room.lookForAt(LOOK_RUINS, spawn.pos.x, spawn.pos.y).some(r => r.structure.structureType === STRUCTURE_RAMPART);
         if (!hasRampart && !hasSite && !hasRuin) {
+            
             let result = room.createConstructionSite(spawn.pos.x, spawn.pos.y, STRUCTURE_RAMPART);
             if (result === OK) {
                 console.log('Rampart construction site placed on spawn at', spawn.pos.x, spawn.pos.y);

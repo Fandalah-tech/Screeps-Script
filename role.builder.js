@@ -37,8 +37,8 @@ module.exports = {
             // 2. Si aucune cible valide, recherche dans l'ordre de priorité habituel
             if (!targetSite) {
                 const buildOrder = [
-                    STRUCTURE_EXTENSION,
                     STRUCTURE_TOWER,
+                    STRUCTURE_EXTENSION,
                     STRUCTURE_RAMPART,
                     STRUCTURE_STORAGE,
                     STRUCTURE_CONTAINER,
@@ -69,22 +69,61 @@ module.exports = {
             return;
         }
 
-        // === PHASE RECHARGE (PRO) ===
-        let totalCreeps = Object.keys(Game.creeps).length;
-        let targets = creep.room.find(FIND_STRUCTURES, {
+        // === PHASE RECHARGE SECURE ===
+        
+        // === PHASE RECHARGE SECURE ===
+        
+        let numHarvesters = _.sum(Game.creeps, c => c.memory.originalRole == 'harvester');
+        let numSuperHarvester = _.sum(Game.creeps, c => c.memory.role == 'superharvester');
+        let safeHarvesterCount = numHarvesters + numSuperHarvester;
+        let quota_min_harvester = 3; // adapte selon ta logique
+        
+        let canWithdrawFromSpawn = (safeHarvesterCount >= quota_min_harvester);
+        
+        // On liste toutes les cibles possibles
+        let containers = creep.room.find(FIND_STRUCTURES, {
             filter: structure =>
-                (structure.structureType === STRUCTURE_EXTENSION ||
-                 structure.structureType === STRUCTURE_SPAWN) &&
+                structure.structureType === STRUCTURE_CONTAINER &&
                 structure.store[RESOURCE_ENERGY] > 0
         });
-
-        if (totalCreeps >= quota_max && targets.length > 0) {
-            // Peut withdraw dans le stock centralisé
-            if (creep.withdraw(targets[0], RESOURCE_ENERGY) == ERR_NOT_IN_RANGE) {
-                creep.moveTo(targets[0], {visualizePathStyle: {stroke: '#ffaa00'}});
+        let storages = creep.room.find(FIND_STRUCTURES, {
+            filter: structure =>
+                structure.structureType === STRUCTURE_STORAGE &&
+                structure.store[RESOURCE_ENERGY] > 0
+        });
+        let spawnsExtensions = [];
+        if (canWithdrawFromSpawn) {
+            spawnsExtensions = creep.room.find(FIND_STRUCTURES, {
+                filter: structure =>
+                    (structure.structureType === STRUCTURE_EXTENSION ||
+                     structure.structureType === STRUCTURE_SPAWN) &&
+                    structure.store[RESOURCE_ENERGY] > 0
+            });
+        }
+        
+        // On cherche le container/storage le plus plein
+        let best = null;
+        if (containers.length > 0) {
+            containers.sort((a, b) => b.store[RESOURCE_ENERGY] - a.store[RESOURCE_ENERGY]);
+            best = containers[0];
+        }
+        if (storages.length > 0) {
+            storages.sort((a, b) => b.store[RESOURCE_ENERGY] - a.store[RESOURCE_ENERGY]);
+            if (!best || storages[0].store[RESOURCE_ENERGY] > best.store[RESOURCE_ENERGY]) {
+                best = storages[0];
+            }
+        }
+        if (!best && spawnsExtensions.length > 0) {
+            // Si tu veux les extensions/spawn en dernier
+            best = spawnsExtensions[0];
+        }
+        
+        if (best) {
+            if (creep.withdraw(best, RESOURCE_ENERGY) == ERR_NOT_IN_RANGE) {
+                creep.moveTo(best, {visualizePathStyle: {stroke: '#ffaa00'}});
             }
         } else {
-            // NE PAS miner : ramasser énergie tombée s’il y en a
+            // Option : ramasser énergie tombée à proximité
             let dropped = creep.room.find(FIND_DROPPED_RESOURCES, {
                 filter: res => res.resourceType === RESOURCE_ENERGY
             });
@@ -93,7 +132,8 @@ module.exports = {
                     creep.moveTo(dropped[0], {visualizePathStyle: {stroke: '#ffaa00'}});
                 }
             }
-            // Sinon, attend… ou ajoute un idle/timer si tu veux éviter du “pathing inutile”
+            // Sinon, idle
         }
+
     }
 };

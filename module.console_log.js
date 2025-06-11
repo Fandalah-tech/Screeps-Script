@@ -4,7 +4,7 @@ module.exports = {
         if (Game.time % 1 !== 0) return;
 
         // Liste des rôles utilisés
-        let allRoles = ['harvester', 'builder', 'upgrader'];
+        let allRoles = ['harvester', 'builder', 'upgrader', 'repairer', 'transporter', 'superharvester'];
         let roleCounts = {};
         for (let role of allRoles) {
             roleCounts[role] = _.sum(Game.creeps, c => c.memory.role === role && c.room.name === room.name);
@@ -17,7 +17,7 @@ module.exports = {
         console.log(
             `Room ${room.name} | RCL${ctrl.level} (${rcPct}%) | ` +
             `Energy: ${room.energyAvailable}/${room.energyCapacityAvailable} | ` +
-            `Creeps: H:${roleCounts.harvester} B:${roleCounts.builder} U:${roleCounts.upgrader}`
+            `Creeps: H:${roleCounts.harvester} B:${roleCounts.builder} U:${roleCounts.upgrader} R:${roleCounts.repairer} T:${roleCounts.transporter} SH:${roleCounts.superharvester}`
         );
     },
 
@@ -28,7 +28,11 @@ module.exports = {
         for (let name in Game.creeps) {
             let c = Game.creeps[name];
             if (c.room.name !== room.name) continue;
-            let msg = `[${c.memory.role || 'no-role'}] ${name}`;
+            let roleLabel = c.memory.role || 'no-role';
+            if (c.memory.originalRole && c.memory.originalRole !== c.memory.role) {
+                roleLabel = `${c.memory.originalRole}->${c.memory.role}`;
+            }
+            let msg = `[${roleLabel}] ${name}`;
 
             if (c.memory.role === 'harvester') {
                 if (c.store.getFreeCapacity(RESOURCE_ENERGY) === 0) {

@@ -1,11 +1,11 @@
 module.exports = {
     run: function(creep) {
-        // Si pas plein, va miner
+        // PHASE DE MINAGE CLASSIQUE
         if (creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
+            // Priorité à la source la plus proche
             let source;
             if (!creep.memory.sourceId) {
-                // Assigne une source la plus libre (ou la plus proche au besoin)
-                source = creep.pos.findClosestByPath(FIND_SOURCES);
+                source = creep.pos.findClosestByPath(FIND_SOURCES_ACTIVE);
                 if (source) creep.memory.sourceId = source.id;
             } else {
                 source = Game.getObjectById(creep.memory.sourceId);
@@ -16,30 +16,38 @@ module.exports = {
                 }
             }
         } else {
-            // Si un container est adjacent à la source et vide, on remplit le container (version PRO)
-            let container = creep.pos.findInRange(FIND_STRUCTURES, 1, {
-                filter: s => s.structureType === STRUCTURE_CONTAINER &&
-                             s.store.getFreeCapacity(RESOURCE_ENERGY) > 0
-            })[0];
-
-            if (container) {
-                if (creep.transfer(container, RESOURCE_ENERGY) == ERR_NOT_IN_RANGE) {
-                    creep.moveTo(container, {visualizePathStyle: {stroke: '#ffffff'}});
+            // Dépose d'abord dans extensions/spawn, puis container sinon
+            let targets = creep.room.find(FIND_STRUCTURES, {
+                filter: s =>
+                    (s.structureType === STRUCTURE_EXTENSION ||
+                     s.structureType === STRUCTURE_SPAWN) &&
+                    s.store.getFreeCapacity(RESOURCE_ENERGY) > 0
+            });
+            if (targets.length > 0) {
+                if (creep.transfer(targets[0], RESOURCE_ENERGY) == ERR_NOT_IN_RANGE) {
+                    creep.moveTo(targets[0], {visualizePathStyle: {stroke: '#ffffff'}});
                 }
             } else {
-                // Sinon, fallback : remplit spawn/extensions
-                let targets = creep.room.find(FIND_STRUCTURES, {
-                    filter: structure =>
-                        (structure.structureType === STRUCTURE_EXTENSION ||
-                         structure.structureType === STRUCTURE_SPAWN) &&
-                        structure.store.getFreeCapacity(RESOURCE_ENERGY) > 0
+                // Si pas de place, dépose dans container à portée 1 (sécurité)
+                let containers = creep.pos.findInRange(FIND_STRUCTURES, 1, {
+                    filter: s => s.structureType === STRUCTURE_CONTAINER &&
+                                 s.store.getFreeCapacity(RESOURCE_ENERGY) > 0
                 });
-                if (targets.length > 0) {
-                    if (creep.transfer(targets[0], RESOURCE_ENERGY) == ERR_NOT_IN_RANGE) {
-                        creep.moveTo(targets[0], {visualizePathStyle: {stroke: '#ffffff'}});
-                    }
+                if (containers.length > 0) {
+                    creep.transfer(containers[0], RESOURCE_ENERGY);
                 }
             }
+        }
+
+        // --- Conversion auto en upgrader si éco logistique en place ---
+        if (
+            _.sum(Game.creeps, c => c.memory.role == 'transporter') > 1 &&
+            _.sum(Game.creeps, c => c.memory.role == 'superharvester') > 1
+        ) {
+            creep.memory.role = 'upgrader';
+            // Attention : NE PAS toucher à isHarvester ! Il sera compté comme harvester jusqu'à sa mort
+            creep.say('Upgrade!');
+            return;
         }
     }
 };
