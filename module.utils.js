@@ -44,8 +44,12 @@ function getFreeSpacesAroundSource(source) {
  * Parking générique : amène le creep à une position (autour du spawn ou custom)
  */
 function goToParking(creep, opts = {}) {
-    // 1. Vider le surplus d'énergie avant parking (optionnel)
-    if (opts.emptyBeforePark !== false && creep.store && creep.store[RESOURCE_ENERGY] > 0) {
+    
+    if (opts.skipEmpty) {
+        // Ignore le vidage d'énergie
+    } 
+        //Vider le surplus d'énergie avant parking (optionnel)
+    else if (opts.emptyBeforePark !== false && creep.store && creep.store[RESOURCE_ENERGY] > 0) {
         // 1. Prio container à portée 1
         let container = creep.pos.findInRange(FIND_STRUCTURES, 1, {
             filter: s => s.structureType === STRUCTURE_CONTAINER &&

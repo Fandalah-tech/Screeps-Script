@@ -1,6 +1,8 @@
 module.exports = {
-    logRoomStatus: function(room) {
-        // Affichage global tous les ticks
+    logRoomStatus: function(room, quotas) {
+        
+        console.log('📊 STATS 📊 ');
+        
         let allRoles = ['harvester', 'builder', 'upgrader', 'repairer', 'transporter', 'superharvester'];
         let roleCounts = {};
         for (let role of allRoles) {
@@ -9,10 +11,37 @@ module.exports = {
         let ctrl = room.controller;
         let rcPct = ((ctrl.progress / ctrl.progressTotal) * 100).toFixed(1);
 
+        // Helper emoji
+        function emojiRole(count, quota) {
+            if (quota === undefined) return `${count}`;
+            if (count < quota) return `❌${count}/${quota}`;
+            if (count > quota) return `⚠️${count}/${quota}`;
+            return `✅${count}/${quota}`;
+        }
+
+        // Création du display par rôle avec abréviations
+        let abbrevs = {
+            harvester: 'H',
+            builder: 'B',
+            upgrader: 'U',
+            repairer: 'R',
+            transporter: 'T',
+            superharvester: 'SH'
+        };
+        let rolesDisplay = allRoles.map(role =>
+            `${abbrevs[role]}:${emojiRole(roleCounts[role], quotas && quotas[role])}`
+        ).join(' ');
+
+        // Emoji général global si tous les quotas sont atteints
+        let allOk = quotas && allRoles.every(role => roleCounts[role] === quotas[role]);
+        let statusEmoji = allOk ? '🎉' : '⚠️';
+
+        // Nombre total de creeps dans la room
+        let totalCreeps = _.sum(Game.creeps, c => c.room.name === room.name);
+
+        // Log final
         console.log(
-            `Room ${room.name} | RCL${ctrl.level} (${rcPct}%) | ` +
-            `Energy: ${room.energyAvailable}/${room.energyCapacityAvailable} | ` +
-            `Creeps: H:${roleCounts.harvester} B:${roleCounts.builder} U:${roleCounts.upgrader} R:${roleCounts.repairer} T:${roleCounts.transporter} SH:${roleCounts.superharvester}`
+            ` ${statusEmoji} Room ${room.name} | RCL${ctrl.level} (${rcPct}%) | Energy: ${room.energyAvailable}/${room.energyCapacityAvailable} | Ratios: ${rolesDisplay} | Total : ${totalCreeps} creeps`
         );
     },
 

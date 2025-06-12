@@ -2,6 +2,12 @@ const { goToParking } = require('module.utils');
 
 module.exports = {
     run: function(creep, recoveryMode) {
+        
+        if (recoveryMode) {
+            require('module.utils').goToParking(creep, {role: 'builder'});
+            return;
+        }
+        
         // State machine construction/charge
         if (creep.memory.building && creep.store[RESOURCE_ENERGY] == 0) {
             creep.memory.building = false;
@@ -33,9 +39,9 @@ module.exports = {
             if (!targetSite) {
                 const buildOrder = [
                     STRUCTURE_TOWER,
-                    STRUCTURE_EXTENSION,
-                    STRUCTURE_RAMPART,
-                    STRUCTURE_STORAGE,
+                    STRUCTURE_STORAGE,    // Priorité max pour stockage
+                    STRUCTURE_EXTENSION,  // Ensuite les extensions
+                    STRUCTURE_RAMPART,    // Puis la défense
                     STRUCTURE_CONTAINER,
                     STRUCTURE_ROAD,
                     STRUCTURE_WALL

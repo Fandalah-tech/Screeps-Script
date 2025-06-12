@@ -2,11 +2,22 @@ const { goToParking } = require('module.utils');
 
 module.exports = {
     run: function(creep, recoveryMode) {
+        
         // Nettoyage éventuel de mémoires obsolètes
         delete creep.memory.building;
         delete creep.memory.buildSiteId;
         delete creep.memory.repairing;
         delete creep.memory.repairTargetId;
+        
+        if (recoveryMode) {
+            require('module.utils').goToParking(creep, {role: 'upgrader'});
+            return;
+        }
+        
+        if (Memory.forceParkUpgraders) {
+            goToParking(creep, {role: 'upgrader'});
+            return;
+        }
 
         let room = creep.room;
         let rcLevel = room.controller.level;

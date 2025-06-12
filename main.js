@@ -63,7 +63,12 @@ module.exports.loop = function() {
     let totalCapacity = room.energyCapacityAvailable;
     let creepname = getNextCreepId();
     let spawn = Game.spawns['Spawn1'];
+
+    // Comptage de stockage
+    let numExtensions = room.find(FIND_MY_STRUCTURES, {filter: s => s.structureType === STRUCTURE_EXTENSION}).length;
+    let numExtensionsSites = room.find(FIND_CONSTRUCTION_SITES, {filter: s => s.structureType === STRUCTURE_EXTENSION}).length;
     let storage = room.find(FIND_STRUCTURES, {filter: s => s.structureType === STRUCTURE_STORAGE})[0];
+    let storageSite = room.find(FIND_CONSTRUCTION_SITES, {filter: s => s.structureType === STRUCTURE_STORAGE}).length;
 
     // Comptage par rôle
     let numHarvesters      = _.sum(Game.creeps, c => c.memory.role == 'harvester');
@@ -73,9 +78,6 @@ module.exports.loop = function() {
     let numRepairers       = _.sum(Game.creeps, c => c.memory.role == 'repairer');
     let numUpgraders       = _.sum(Game.creeps, c => c.memory.role == 'upgrader');
     
-    // Flag recoveryMode global
-    let recoveryMode = (numTransporter < 1 && numSuperHarvester < sources.length);
-
     // === Quotas dynamiques ===
     let quota_harvester = sources.length;
     let quota_superharvester = 0;
@@ -100,6 +102,11 @@ module.exports.loop = function() {
     if (ctrlLevel >= 2 && totalEnergy > totalCapacity * 0.80) {
         quota_builder++;
     }
+    // Bonus builder si niveau 4+ et storage à constuire
+    if (ctrlLevel >= 4 && !storage) {
+        quota_builder++;
+    }
+
     // Bonus upgraders uniquement si buffer excédentaire
     if (totalEnergy >= totalCapacity * 0.98 && storage && storage.store[RESOURCE_ENERGY] > 20000) {
         quota_upgrader += 2;
@@ -109,32 +116,61 @@ module.exports.loop = function() {
     let critRep = getCriticalRepairCount(room);
     quota_repairers += Math.min(2, critRep);
     
+    if ((ctrlLevel >= 4) && (!storage || storageSite > 0 || numExtensionsSites > 0 )) {
+        // Tant que storage ou extensions à construire, quota_upgrader = 0
+        quota_upgrader = 0;
+    }
+    
+    // Quotas combinés pour transfert vers le log
+    let quotas = {
+    harvester: quota_harvester,
+    builder: quota_builder,
+    upgrader: quota_upgrader,
+    repairer: quota_repairers,
+    transporter: quota_transporter,
+    superharvester: quota_superharvester
+    };
+    
+    // Flag recoveryMode global
+    let recoveryMode = (numTransporter < quota_transporter || numSuperHarvester < quota_superharvester);
+    
+    Memory.forceParkUpgraders = ( (ctrlLevel >= 4) &&  ( !storage || storageSite > 0 || numExtensionsSites > 0  ));
+    
     let canSpawn = !spawn.spawning; // Vérifie si le spawn est libre
 
     if (canSpawn) {
+        
+        // En recovery : spawn d'abord un SH solide (>=400 énergie) pour relancer la prod d'énergie.
+        // Ne spawn un Harvester mini qu'en cas de crise extrême (>=200 énergie), pour éviter le softlock.
+        
+        // Sécurité recovery stricte
+        if (recoveryMode && numSuperHarvester < quota_superharvester && room.energyAvailable >= 400) {
+            Game.spawns['Spawn1'].spawnCreep(getBestBody('superharvester', room.energyAvailable), '⛏️⛏️' + creepname, {memory: {role: 'superharvester', originalRole: 'superharvester'}});
+            return;
+        }
         // Sécurité recovery ultra stricte
         if ((numHarvesters + numSuperHarvester) < sources.length && room.energyAvailable >= 200) {
-            Game.spawns['Spawn1'].spawnCreep(getBestBody('harvester', room.energyAvailable), 'H-EMER-' + creepname, {memory: {role: 'harvester', originalRole: 'harvester'}});
+            Game.spawns['Spawn1'].spawnCreep(getBestBody('harvester', room.energyAvailable), '⛏️⚠️' + creepname, {memory: {role: 'harvester', originalRole: 'harvester'}});
             return;
         }
         // Production normale selon quotas
         if (numHarvesters < quota_harvester) {
-            Game.spawns['Spawn1'].spawnCreep(getBestBody('harvester', room.energyAvailable), 'H-' + creepname, {memory: {role: 'harvester', originalRole: 'harvester'}});
+            Game.spawns['Spawn1'].spawnCreep(getBestBody('harvester', room.energyAvailable), '⛏️' + creepname, {memory: {role: 'harvester', originalRole: 'harvester'}});
         }
         else if (numSuperHarvester < quota_superharvester && room.energyAvailable >= 0.75 * room.energyCapacityAvailable) {
-            Game.spawns['Spawn1'].spawnCreep(getBestBody('superharvester', room.energyAvailable), 'SH-' + creepname, {memory: {role: 'superharvester', originalRole: 'superharvester'}});
+            Game.spawns['Spawn1'].spawnCreep(getBestBody('superharvester', room.energyAvailable), '⛏️⛏️' + creepname, {memory: {role: 'superharvester', originalRole: 'superharvester'}});
         }
         else if (numTransporter < quota_transporter && room.energyAvailable >= 0.5 * room.energyCapacityAvailable) {
-            Game.spawns['Spawn1'].spawnCreep(getBestBody('transporter', room.energyAvailable), 'T-' + creepname, {memory: {role: 'transporter', originalRole: 'transporter'}});
+            Game.spawns['Spawn1'].spawnCreep(getBestBody('transporter', room.energyAvailable), '🛒' + creepname, {memory: {role: 'transporter', originalRole: 'transporter'}});
         }
         else if (numBuilders < quota_builder && room.energyAvailable >= 0.75 * room.energyCapacityAvailable) {
-            Game.spawns['Spawn1'].spawnCreep(getBestBody('builder', room.energyAvailable), 'B-' + creepname, {memory: {role: 'builder', originalRole: 'builder'}});
+            Game.spawns['Spawn1'].spawnCreep(getBestBody('builder', room.energyAvailable), '🏗️️' + creepname, {memory: {role: 'builder', originalRole: 'builder'}});
         }
         else if (numRepairers < quota_repairers && room.energyAvailable >= 0.5 * room.energyCapacityAvailable) {
-            Game.spawns['Spawn1'].spawnCreep(getBestBody('repairer', room.energyAvailable), 'R-' + creepname, {memory: {role: 'repairer', originalRole: 'repairer'}});
+            Game.spawns['Spawn1'].spawnCreep(getBestBody('repairer', room.energyAvailable), '🔧' + creepname, {memory: {role: 'repairer', originalRole: 'repairer'}});
         }
         else if (numUpgraders < quota_upgrader && room.energyAvailable >= 0.5 * room.energyCapacityAvailable) {
-            Game.spawns['Spawn1'].spawnCreep(getBestBody('upgrader', room.energyAvailable), 'U-' + creepname, {memory: {role: 'upgrader', originalRole: 'upgrader'}});
+            Game.spawns['Spawn1'].spawnCreep(getBestBody('upgrader', room.energyAvailable), '🎯' + creepname, {memory: {role: 'upgrader', originalRole: 'upgrader'}});
         }
     }
     
@@ -172,7 +208,7 @@ module.exports.loop = function() {
     if (tower_manager && tower_manager.run) tower_manager.run();
 
     // --- LOG ---
-    console_log.logRoomStatus(room);
+    console_log.logRoomStatus(room, quotas);
     console_log.logCreepDetails(room);
 
     // --- BENCHMARK ---

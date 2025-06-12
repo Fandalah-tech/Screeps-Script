@@ -2,6 +2,12 @@ const { goToParking } = require('module.utils');
 
 module.exports = {
     run: function(creep, recoveryMode) {
+        
+        if (recoveryMode) {
+            goToParking(creep, {role: 'upgrader'}); // ou 'repairer'
+            return;
+        }
+
         if (creep.memory.repairing && creep.store[RESOURCE_ENERGY] == 0) {
             creep.memory.repairing = false;
         }
