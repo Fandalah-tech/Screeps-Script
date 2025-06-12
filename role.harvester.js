@@ -1,8 +1,9 @@
+const { goToParking } = require('module.utils');
+
 module.exports = {
     run: function(creep, recoveryMode) {
         // PHASE DE MINAGE CLASSIQUE
         if (creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
-            // Priorité à la source la plus proche
             let source;
             if (!creep.memory.sourceId) {
                 source = creep.pos.findClosestByPath(FIND_SOURCES_ACTIVE);
@@ -35,25 +36,20 @@ module.exports = {
                 });
                 if (containers.length > 0) {
                     creep.transfer(containers[0], RESOURCE_ENERGY);
+                } else {
+                    goToParking(creep, {role: 'harvester'});
                 }
             }
         }
 
-        let room = Game.spawns['Spawn1'].room;
-        let ctrlLevel = room.controller.level;
-        let numUpgraders  = _.sum(Game.creeps, c => c.memory.role == 'upgrader');
-        let quota_upgrader = ctrlLevel;
-
-        // --- Conversion auto en upgrader si éco logistique en place ---
+        // --- Suicide si vraiment plus utile (optionnel) ---
         if (
             _.sum(Game.creeps, c => c.memory.role == 'transporter') > 1 &&
-            _.sum(Game.creeps, c => c.memory.role == 'superharvester') > 1
+            _.sum(Game.creeps, c => c.memory.role == 'superharvester') > 1 &&
+            creep.ticksToLive < 500
         ) {
-            if (numUpgraders < quota_upgrader) {
-                creep.memory.role = 'upgrader';
-                creep.say('⚡ upgrade!');
-                // Ajoute ici la logique pour ajuster les quotas ou un log si tu veux.
-            }
+            creep.suicide();
+            return;
         }
     }
 };

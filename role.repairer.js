@@ -1,3 +1,5 @@
+const { goToParking } = require('module.utils');
+
 module.exports = {
     run: function(creep, recoveryMode) {
         if (creep.memory.repairing && creep.store[RESOURCE_ENERGY] == 0) {
@@ -57,23 +59,21 @@ module.exports = {
                     && target.hits >= target.hitsMax
             ) {
                 creep.memory.repairTargetId = undefined;
+                goToParking(creep, {role: 'repairer'});
                 return;
             }
 
             if (target && (target.structureType === STRUCTURE_RAMPART || target.structureType === STRUCTURE_WALL)) {
                 if (target.hits < initialThreshold) {
-                    // Toujours réparer tant que < 10k
                     if (creep.repair(target) == ERR_NOT_IN_RANGE) {
                         creep.moveTo(target, {visualizePathStyle: {stroke: '#aaffaa'}});
                     }
                     return;
                 } else {
-                    // Arrête de réparer une fois le seuil 10k atteint
                     creep.memory.repairTargetId = undefined;
                 }
             }
 
-            // Si toujours rien, cherche une autre structure à réparer (hors mur/rempart)
             if (!target || target.hits >= initialThreshold) {
                 target = creep.pos.findClosestByPath(FIND_STRUCTURES, {
                     filter: s => s.hits < s.hitsMax &&
@@ -83,16 +83,19 @@ module.exports = {
                 creep.memory.repairTargetId = target ? target.id : undefined;
             }
 
-            // Répare ou se déplace vers la cible
             if (target && target.hits < target.hitsMax) {
                 if (creep.repair(target) == ERR_NOT_IN_RANGE) {
                     creep.moveTo(target, {visualizePathStyle: {stroke: '#aaffaa'}});
                 }
             }
+            if (!target) {
+                goToParking(creep, {role: 'repairer'});
+                return;
+            }
             return;
         }
 
-        // --- PHASE RECHARGE REPAIRER (inchangé) ---
+        // --- PHASE RECHARGE REPAIRER ---
         let containers = creep.room.find(FIND_STRUCTURES, {
             filter: s => s.structureType === STRUCTURE_CONTAINER
         });
@@ -164,7 +167,8 @@ module.exports = {
                     creep.moveTo(dropped[0], {visualizePathStyle: {stroke: '#ffaa00'}});
                 }
             }
-            return; // attend le prochain tick
+            goToParking(creep, {role: 'repairer'});
+            return;
         }
         if (creep.withdraw(target, RESOURCE_ENERGY) == ERR_NOT_IN_RANGE) {
             creep.moveTo(target, {visualizePathStyle: {stroke: '#ffaa00'}});

@@ -1,9 +1,8 @@
+const { goToParking } = require('module.utils');
+
 module.exports = {
     run: function(creep, recoveryMode) {
-        
-        //console.log(`[UPGRADER] ${creep.name} - role: ${creep.memory.role}, upgrading: ${creep.memory.upgrading}, carry: ${creep.store[RESOURCE_ENERGY]}`);
-
-        // Nettoie tout flag builder restant
+        // Nettoyage éventuel de mémoires obsolètes
         delete creep.memory.building;
         delete creep.memory.buildSiteId;
         delete creep.memory.repairing;
@@ -11,29 +10,16 @@ module.exports = {
 
         let room = creep.room;
         let rcLevel = room.controller.level;
-        
-        // Toujours forcer la state machine, quoi qu'il arrive
+        let energyAvailable = room.energyAvailable;
+        let energyCapacity = room.energyCapacityAvailable;
+
         if (creep.store[RESOURCE_ENERGY] === 0) {
             creep.memory.upgrading = false;
         } else {
             creep.memory.upgrading = true;
         }
 
-        // === RC3+ : idle complet si énergie basse ===
-        if (rcLevel >= 3) {
-            let threshold = room.energyCapacityAvailable * 0.6; // 60%
-            if (room.energyAvailable < threshold) {
-                creep.memory.upgrading = false; // force l'idle
-                creep.say('🔋 wait');
-                let parkingPos = new RoomPosition(Game.spawns['Spawn1'].pos.x, Game.spawns['Spawn1'].pos.y -4, Game.spawns['Spawn1'].pos.roomName);
-                if (!creep.pos.isEqualTo(parkingPos)) {
-                    creep.moveTo(parkingPos, {visualizePathStyle: {stroke: '#8888ff'}});
-                }
-                return;
-            }
-        }
-        
-        // PHASE UPGRADE
+        // === PHASE UPGRADE ===
         if (creep.memory.upgrading) {
             creep.memory.energyTargetId = undefined;
             if (creep.upgradeController(room.controller) == ERR_NOT_IN_RANGE) {
@@ -42,7 +28,8 @@ module.exports = {
             return;
         }
 
-        // === PHASE RECHARGE SECURE ===
+        // === PHASE RECHARGE ===
+        // 1. Containers/storage d’abord
         let containers = room.find(FIND_STRUCTURES, {
             filter: s => s.structureType === STRUCTURE_CONTAINER && s.store[RESOURCE_ENERGY] > 0
         });
@@ -62,12 +49,22 @@ module.exports = {
             }
         }
 
-        if (best) {
-            if (creep.withdraw(best, RESOURCE_ENERGY) == ERR_NOT_IN_RANGE) {
-                creep.moveTo(best, {visualizePathStyle: {stroke: '#ffaa00'}});
+        // 2. À partir de RC3 et si énergie suffisante, autorise le spawn/extensions
+        let canWithdrawFromSpawn = (rcLevel >= 3 && energyAvailable >= energyCapacity * 0.7);
+        if (!best && canWithdrawFromSpawn) {
+            let spawnsExtensions = room.find(FIND_STRUCTURES, {
+                filter: s =>
+                    (s.structureType === STRUCTURE_SPAWN ||
+                     s.structureType === STRUCTURE_EXTENSION) &&
+                    s.store[RESOURCE_ENERGY] > 0
+            });
+            if (spawnsExtensions.length > 0) {
+                best = spawnsExtensions[0];
             }
-        } else {
-            // Pickup énergie tombée
+        }
+
+        // 3. Pickup énergie tombée
+        if (!best) {
             let dropped = room.find(FIND_DROPPED_RESOURCES, {
                 filter: res => res.resourceType === RESOURCE_ENERGY
             });
@@ -75,8 +72,26 @@ module.exports = {
                 if (creep.pickup(dropped[0]) == ERR_NOT_IN_RANGE) {
                     creep.moveTo(dropped[0], {visualizePathStyle: {stroke: '#ffaa00'}});
                 }
+                return;
             }
-            // Sinon, idle total (pas d'énergie dispo)
+        }
+
+        // 4. Encore rien ? Mine comme un harvester
+        if (!best) {
+            let source = creep.pos.findClosestByPath(FIND_SOURCES_ACTIVE);
+            if (source) {
+                if (creep.harvest(source) == ERR_NOT_IN_RANGE) {
+                    creep.moveTo(source, {visualizePathStyle: {stroke: '#aaffaa'}});
+                }
+            } else {
+                goToParking(creep, {role: 'upgrader'});
+            }
+            return;
+        }
+
+        // 5. Withdraw classique si cible trouvée
+        if (creep.withdraw(best, RESOURCE_ENERGY) == ERR_NOT_IN_RANGE) {
+            creep.moveTo(best, {visualizePathStyle: {stroke: '#ffaa00'}});
         }
     }
 };

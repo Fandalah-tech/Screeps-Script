@@ -1,7 +1,8 @@
+const { goToParking } = require('module.utils');
+
 module.exports = {
     run: function(creep, recoveryMode) {
-
-        // Mode construction/charge
+        // State machine construction/charge
         if (creep.memory.building && creep.store[RESOURCE_ENERGY] == 0) {
             creep.memory.building = false;
         }
@@ -54,12 +55,9 @@ module.exports = {
                     creep.moveTo(targetSite, {visualizePathStyle: {stroke: '#ffffff'}});
                 }
             } else {
-                // Pas de chantier, switch en upgrader ET nettoie la mémoire builder
-                creep.say('⚡ upgrade');
-                creep.memory.role = 'upgrader';
-                creep.memory.building = undefined;
-                creep.memory.buildSiteId = undefined;
-                creep.memory.energyTargetId = undefined;
+                // Parking si rien à build
+                goToParking(creep, {role: 'builder'});
+                if (creep.ticksToLive < 500) creep.suicide();
                 return;
             }
             return;
@@ -75,10 +73,9 @@ module.exports = {
         let totalStored   = containers.reduce((sum, c) => sum + c.store[RESOURCE_ENERGY], 0);
         let containersEmptyOrLow = (containers.length === 0) || (totalStored < 0.10 * totalCapacity);
 
-        // *** Builder peut piocher dans spawn/extensions SEULEMENT en recovery ET containers vides/absents ***
+        // Builder peut piocher dans spawn/extensions seulement en recovery ou containers vides/absents
         let canWithdrawFromSpawn = (!recoveryMode) || (recoveryMode && containersEmptyOrLow);
 
-        // Sélection de la cible de recharge
         if (!creep.memory.energyTargetId) {
             let containerTargets = creep.room.find(FIND_STRUCTURES, {
                 filter: s => s.structureType === STRUCTURE_CONTAINER && s.store[RESOURCE_ENERGY] > 0
@@ -95,7 +92,6 @@ module.exports = {
                         s.store[RESOURCE_ENERGY] > 0
                 });
             }
-            // Scoring
             let scored = [];
             containerTargets.forEach(container => {
                 let assigned = _.sum(Game.creeps, c => c.memory.energyTargetId == container.id);
@@ -126,9 +122,7 @@ module.exports = {
             }
         }
 
-        // Utilisation de la cible mémorisée
         let target = creep.memory.energyTargetId ? Game.getObjectById(creep.memory.energyTargetId) : null;
-        // Reset si cible interdite ou vide
         if (
             (!canWithdrawFromSpawn && target && (target.structureType === STRUCTURE_SPAWN || target.structureType === STRUCTURE_EXTENSION))
         ) {
@@ -136,10 +130,8 @@ module.exports = {
             target = null;
         }
 
-        // Si la cible est invalide ou vide, essaie de prendre au spawn/extensions si recovery possible
         if (!target || (target.store && target.store[RESOURCE_ENERGY] === 0)) {
             creep.memory.energyTargetId = undefined;
-            // Ramasse énergie tombée si présente
             let dropped = creep.room.find(FIND_DROPPED_RESOURCES, {
                 filter: res => res.resourceType === RESOURCE_ENERGY
             });
@@ -149,7 +141,6 @@ module.exports = {
                 }
                 return;
             }
-            // Dernière chance, tenter la pioche “même petit montant” au spawn/extensions si c’est permis
             if (canWithdrawFromSpawn) {
                 let possibleSpawns = creep.room.find(FIND_STRUCTURES, {
                     filter: s =>
@@ -164,9 +155,9 @@ module.exports = {
                     return;
                 }
             }
+            goToParking(creep, {role: 'builder'});
             return;
         }
-        // Withdraw classique
         if (creep.withdraw(target, RESOURCE_ENERGY) == ERR_NOT_IN_RANGE) {
             creep.moveTo(target, {visualizePathStyle: {stroke: '#ffaa00'}});
         }

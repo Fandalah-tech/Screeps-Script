@@ -1,5 +1,4 @@
 let stats_benchmark = {
-    
     logMilestone: function(key, condition, extra = undefined) {
         if (!Memory.benchmarks) Memory.benchmarks = {};
         if (!Memory.benchmarks[key] && condition) {
@@ -11,7 +10,7 @@ let stats_benchmark = {
             }
         }
     },
-    
+
     run: function(room) {
         if (!Memory.benchmarks) Memory.benchmarks = {};
         if (!Memory.benchmarks.start_tick) {
@@ -21,7 +20,8 @@ let stats_benchmark = {
 
         const ctrl = room.controller;
         const spawns = room.find(FIND_MY_STRUCTURES, {filter: s => s.structureType === STRUCTURE_SPAWN});
-        const creeps = _.filter(Game.creeps, c => c.memory.role === 'worker' && c.room.name === room.name);
+        // Adapté à ton naming : plus de "worker" générique, mais possible d'enrichir
+        const creeps = _.filter(Game.creeps, c => c.room.name === room.name);
 
         this.logMilestone('spawn_placed', spawns.length > 0);
         this.logMilestone('first_creep', creeps.length > 0);

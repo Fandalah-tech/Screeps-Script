@@ -9,6 +9,7 @@ const build_manager = require('module.build_manager');
 const console_log = require('module.console_log');
 const stats_benchmark = require('stats_benchmark');
 const { getBestBody } = require('module.body_manager');
+const tower_manager = require('module.tower_manager');
 
 if (!Memory.creepCounter) Memory.creepCounter = 0;
 function getNextCreepId() {
@@ -55,8 +56,6 @@ module.exports.loop = function() {
         }
     }
     
-    console.log("***************************************************************************");
-
     let room = Game.spawns['Spawn1'].room;
     let sources = room.find(FIND_SOURCES);
     let ctrlLevel = room.controller.level;
@@ -64,13 +63,13 @@ module.exports.loop = function() {
     let totalCapacity = room.energyCapacityAvailable;
     let creepname = getNextCreepId();
     let spawn = Game.spawns['Spawn1'];
+    let storage = room.find(FIND_STRUCTURES, {filter: s => s.structureType === STRUCTURE_STORAGE})[0];
 
     // Comptage par rôle
     let numHarvesters      = _.sum(Game.creeps, c => c.memory.role == 'harvester');
     let numSuperHarvester  = _.sum(Game.creeps, c => c.memory.role == 'superharvester');
     let numTransporter     = _.sum(Game.creeps, c => c.memory.role == 'transporter');
-    let numBuildersActive  = _.sum(Game.creeps, c => c.memory.role === 'builder');
-    let numBuildersTotal   = _.sum(Game.creeps, c => c.memory.originalRole === 'builder');
+    let numBuilders        = _.sum(Game.creeps, c => c.memory.role === 'builder');
     let numRepairers       = _.sum(Game.creeps, c => c.memory.role == 'repairer');
     let numUpgraders       = _.sum(Game.creeps, c => c.memory.role == 'upgrader');
     
@@ -83,19 +82,7 @@ module.exports.loop = function() {
     let quota_transporter = 0;
     let quota_builder = 2;
     let quota_repairers = 1;
-    let quota_upgrader = ctrlLevel;
-
-    // Conversion dynamique builder <-> upgrader selon chantier
-    let chantier = room.find(FIND_CONSTRUCTION_SITES).length > 0;
-    if (numBuildersActive < quota_builder && numBuildersTotal > 0 && chantier) {
-        let requalifiable = _.find(Game.creeps, c =>
-            c.memory.originalRole === 'builder' && c.memory.role !== 'builder'
-        );
-        if (requalifiable) {
-            requalifiable.memory.role = 'builder';
-            requalifiable.say('👷 build!');
-        }
-    }
+    let quota_upgrader = Math.min(ctrlLevel, 4); // plafonne à 4 U, adapte si besoin
 
     // 1. Nombre de sources avec container
     let sourcesWithContainer = sources.filter(source =>
@@ -107,19 +94,14 @@ module.exports.loop = function() {
     
     // 2. Quotas dynamiques
     quota_superharvester = sourcesWithContainer;
-    if (sourcesWithContainer === sources.length) {
-        // Toutes les sources ont leur container → +1 transporter de support
-        quota_transporter = sourcesWithContainer + 1;
-    } else {
-        // Progression linéaire
-        quota_transporter = sourcesWithContainer;
-    }
+    quota_transporter = sourcesWithContainer + (sourcesWithContainer === sources.length ? 1 : 0);
 
     // Bonus builder si énergie très pleine
     if (ctrlLevel >= 2 && totalEnergy > totalCapacity * 0.80) {
         quota_builder++;
     }
-    if (totalEnergy >= totalCapacity * 0.95) {
+    // Bonus upgraders uniquement si buffer excédentaire
+    if (totalEnergy >= totalCapacity * 0.98 && storage && storage.store[RESOURCE_ENERGY] > 20000) {
         quota_upgrader += 2;
     }
 
@@ -130,44 +112,28 @@ module.exports.loop = function() {
     let canSpawn = !spawn.spawning; // Vérifie si le spawn est libre
 
     if (canSpawn) {
-        // --- SÉCURITÉ recovery ultra stricte ---
-        // 1. Toujours au moins 1 harvester ou superharvester par source
-        if ((numHarvesters + numSuperHarvester) < sources.lengt && room.energyAvailable >= 200) {
-            console.log('H-EMER à venir...');
+        // Sécurité recovery ultra stricte
+        if ((numHarvesters + numSuperHarvester) < sources.length && room.energyAvailable >= 200) {
             Game.spawns['Spawn1'].spawnCreep(getBestBody('harvester', room.energyAvailable), 'H-EMER-' + creepname, {memory: {role: 'harvester', originalRole: 'harvester'}});
             return;
         }
-        // 2. Ensuite au moins 2 builder EMER seulement si un harvester est présent
-        if (numBuildersActive < quota_builder && room.energyAvailable >= 200) {
-            console.log('B-EMER à venir...');
-            Game.spawns['Spawn1'].spawnCreep(getBestBody('builder', room.energyAvailable), 'B-EMER-' + creepname, {memory: {role: 'builder', originalRole: 'builder'}});
-            // return;
-        }
-    
-    
-        // --- Production normale selon quotas ---
+        // Production normale selon quotas
         if (numHarvesters < quota_harvester) {
-            console.log('H à venir...');
             Game.spawns['Spawn1'].spawnCreep(getBestBody('harvester', room.energyAvailable), 'H-' + creepname, {memory: {role: 'harvester', originalRole: 'harvester'}});
         }
-        else if (numSuperHarvester < quota_superharvester) {
-            console.log('SH à venir...');
+        else if (numSuperHarvester < quota_superharvester && room.energyAvailable >= 0.75 * room.energyCapacityAvailable) {
             Game.spawns['Spawn1'].spawnCreep(getBestBody('superharvester', room.energyAvailable), 'SH-' + creepname, {memory: {role: 'superharvester', originalRole: 'superharvester'}});
         }
-        else if (numTransporter < quota_transporter) {
-            console.log('T à venir...');
+        else if (numTransporter < quota_transporter && room.energyAvailable >= 0.5 * room.energyCapacityAvailable) {
             Game.spawns['Spawn1'].spawnCreep(getBestBody('transporter', room.energyAvailable), 'T-' + creepname, {memory: {role: 'transporter', originalRole: 'transporter'}});
         }
-        else if (numBuildersActive < quota_builder && room.energyAvailable >= 200) {
-            console.log('B à venir...');
+        else if (numBuilders < quota_builder && room.energyAvailable >= 0.75 * room.energyCapacityAvailable) {
             Game.spawns['Spawn1'].spawnCreep(getBestBody('builder', room.energyAvailable), 'B-' + creepname, {memory: {role: 'builder', originalRole: 'builder'}});
         }
-        else if (numRepairers < quota_repairers) {
-            console.log('R à venir...');
+        else if (numRepairers < quota_repairers && room.energyAvailable >= 0.5 * room.energyCapacityAvailable) {
             Game.spawns['Spawn1'].spawnCreep(getBestBody('repairer', room.energyAvailable), 'R-' + creepname, {memory: {role: 'repairer', originalRole: 'repairer'}});
         }
-        else if (numUpgraders < quota_upgrader) {
-            console.log('U à venir...');
+        else if (numUpgraders < quota_upgrader && room.energyAvailable >= 0.5 * room.energyCapacityAvailable) {
             Game.spawns['Spawn1'].spawnCreep(getBestBody('upgrader', room.energyAvailable), 'U-' + creepname, {memory: {role: 'upgrader', originalRole: 'upgrader'}});
         }
     }
@@ -201,18 +167,13 @@ module.exports.loop = function() {
     if (build_manager && build_manager.runRoads) build_manager.runRoads(spawn);
     if (build_manager && build_manager.runContainer) build_manager.runContainer(spawn);
     if (build_manager && build_manager.runRampart) build_manager.runRampart(spawn);
+    
+    // --- TOWER MANAGER ---
+    if (tower_manager && tower_manager.run) tower_manager.run();
 
     // --- LOG ---
     console_log.logRoomStatus(room);
-    //console_log.logCreepDetails(room);
-    console.log(
-    'QUOTAS - H:', numHarvesters,'/',quota_harvester,
-    '  SH:', numSuperHarvester,'/',quota_superharvester,
-    '  T:', numTransporter,'/',quota_transporter,
-    '  B:', numBuildersTotal,'/',quota_builder,
-    '  R:', numRepairers,'/',quota_repairers,
-    '  U:', numUpgraders,'/',quota_upgrader
-    );
+    console_log.logCreepDetails(room);
 
     // --- BENCHMARK ---
     stats_benchmark.run(room);
