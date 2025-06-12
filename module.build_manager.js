@@ -37,8 +37,7 @@ function buildRoadAround(room, center) {
 
             let hasRoad = room.lookForAt(LOOK_STRUCTURES, x, y).some(s => s.structureType === STRUCTURE_ROAD);
             let hasSite = room.lookForAt(LOOK_CONSTRUCTION_SITES, x, y).some(s => s.structureType === STRUCTURE_ROAD);
-            let hasRuin = room.lookForAt(LOOK_RUINS, x, y).some(r => r.structure.structureType === STRUCTURE_ROAD);
-            if (!hasRoad && !hasSite && !hasRuin) {
+            if (!hasRoad && !hasSite) {
                 if (isConnectedToRoad(room, x, y)) {
                 room.createConstructionSite(x, y, STRUCTURE_ROAD);
                 }
@@ -64,15 +63,20 @@ function getDonutCostMatrix(spawn) {
 }
 
 function isConnectedToRoad(room, x, y) {
-    // Renvoie true si au moins une des 8 cases autour de (x, y) contient une route (ou site de route)
+    // True si une des 8 cases autour de (x, y) contient une structure (n'importe laquelle) ou un chantier de structure - Modifié pour inclure aussi les structures
     for (let dx = -1; dx <= 1; dx++) {
         for (let dy = -1; dy <= 1; dy++) {
             if (dx === 0 && dy === 0) continue;
             let tx = x + dx, ty = y + dy;
             if (tx < 1 || tx > 48 || ty < 1 || ty > 48) continue;
-            let hasRoad = room.lookForAt(LOOK_STRUCTURES, tx, ty).some(s => s.structureType === STRUCTURE_ROAD);
-            let hasRoadSite = room.lookForAt(LOOK_CONSTRUCTION_SITES, tx, ty).some(s => s.structureType === STRUCTURE_ROAD);
-            if (hasRoad || hasRoadSite) return true;
+
+            // N'importe quelle structure
+            let hasStructure = room.lookForAt(LOOK_STRUCTURES, tx, ty).length > 0;
+
+            // N'importe quel site de construction
+            let hasSite = room.lookForAt(LOOK_CONSTRUCTION_SITES, tx, ty).length > 0;
+
+            if (hasStructure || hasSite) return true;
         }
     }
     return false;
@@ -138,9 +142,8 @@ const build_manager = {
 
                 let hasRoad = structures.some(s => s.structureType === STRUCTURE_ROAD);
                 let hasSite = constructionSites.some(s => s.structureType === STRUCTURE_ROAD);
-                let hasRuin = room.lookForAt(LOOK_RUINS, pos.x, pos.y).some(r => r.structure.structureType === STRUCTURE_ROAD);
 
-                if (!hasRoad && !hasSite && !hasRuin) {
+                if (!hasRoad && !hasSite) {
                     if (isConnectedToRoad(room, pos.x, pos.y)) {
                     room.createConstructionSite(pos.x, pos.y, STRUCTURE_ROAD);
                     }
@@ -179,9 +182,8 @@ const build_manager = {
 
                 let hasRoad = structures.some(s => s.structureType === STRUCTURE_ROAD);
                 let hasSite = constructionSites.some(s => s.structureType === STRUCTURE_ROAD);
-                let hasRuin = room.lookForAt(LOOK_RUINS, pos.x, pos.y).some(r => r.structure.structureType === STRUCTURE_ROAD);
 
-                if (!hasRoad && !hasSite && !hasRuin) {
+                if (!hasRoad && !hasSite) {
                     if (isConnectedToRoad(room, pos.x, pos.y)) {
                     room.createConstructionSite(pos.x, pos.y, STRUCTURE_ROAD);
                     }

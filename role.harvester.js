@@ -1,5 +1,5 @@
 module.exports = {
-    run: function(creep) {
+    run: function(creep, recoveryMode) {
         // PHASE DE MINAGE CLASSIQUE
         if (creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
             // Priorité à la source la plus proche
@@ -39,15 +39,21 @@ module.exports = {
             }
         }
 
+        let room = Game.spawns['Spawn1'].room;
+        let ctrlLevel = room.controller.level;
+        let numUpgraders  = _.sum(Game.creeps, c => c.memory.role == 'upgrader');
+        let quota_upgrader = ctrlLevel;
+
         // --- Conversion auto en upgrader si éco logistique en place ---
         if (
             _.sum(Game.creeps, c => c.memory.role == 'transporter') > 1 &&
             _.sum(Game.creeps, c => c.memory.role == 'superharvester') > 1
         ) {
-            creep.memory.role = 'upgrader';
-            // Attention : NE PAS toucher à isHarvester ! Il sera compté comme harvester jusqu'à sa mort
-            creep.say('Upgrade!');
-            return;
+            if (numUpgraders < quota_upgrader) {
+                creep.memory.role = 'upgrader';
+                creep.say('⚡ upgrade!');
+                // Ajoute ici la logique pour ajuster les quotas ou un log si tu veux.
+            }
         }
     }
 };

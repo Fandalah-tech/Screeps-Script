@@ -12,15 +12,13 @@ module.exports = {
         let ctrl = room.controller;
         let rcPct = ((ctrl.progress / ctrl.progressTotal) * 100).toFixed(1);
         
-        console.log("***************************************************************************");
-
         console.log(
             `Room ${room.name} | RCL${ctrl.level} (${rcPct}%) | ` +
             `Energy: ${room.energyAvailable}/${room.energyCapacityAvailable} | ` +
             `Creeps: H:${roleCounts.harvester} B:${roleCounts.builder} U:${roleCounts.upgrader} R:${roleCounts.repairer} T:${roleCounts.transporter} SH:${roleCounts.superharvester}`
         );
     },
-
+        
     logCreepDetails: function(room) {
         // Affichage détaillé de chaque creep (tous les X ticks)
         if (Game.time % 1 !== 0) return;

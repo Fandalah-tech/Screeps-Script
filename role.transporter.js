@@ -1,5 +1,5 @@
 module.exports = {
-    run: function(creep) {
+    run: function(creep, recoveryMode) {
         // Mode état simple : "remplir" ou "vider"
         if (creep.memory.working && creep.store[RESOURCE_ENERGY] == 0) {
             creep.memory.working = false;
