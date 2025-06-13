@@ -4,6 +4,7 @@ const roleTransporter = require('role.transporter');
 const roleBuilder = require('role.builder');
 const roleRepairer = require('role.repairer');
 const roleUpgrader = require('role.upgrader');
+const roleFiller = require('role.filler');
 const { planBase } = require('module.plan_base');
 const build_manager = require('module.build_manager');
 const console_log = require('module.console_log');
@@ -77,6 +78,7 @@ module.exports.loop = function() {
     let numBuilders        = _.sum(Game.creeps, c => c.memory.role === 'builder');
     let numRepairers       = _.sum(Game.creeps, c => c.memory.role == 'repairer');
     let numUpgraders       = _.sum(Game.creeps, c => c.memory.role == 'upgrader');
+    let numFillers       = _.sum(Game.creeps, c => c.memory.role == 'filler');
     
     // === Quotas dynamiques ===
     let quota_harvester = sources.length;
@@ -85,6 +87,7 @@ module.exports.loop = function() {
     let quota_builder = 2;
     let quota_repairers = 1;
     let quota_upgrader = Math.min(ctrlLevel, 4); // plafonne à 4 U, adapte si besoin
+    let quota_filler = 1;
 
     // 1. Nombre de sources avec container
     let sourcesWithContainer = sources.filter(source =>
@@ -171,6 +174,8 @@ module.exports.loop = function() {
         }
         else if (numUpgraders < quota_upgrader && room.energyAvailable >= 0.5 * room.energyCapacityAvailable) {
             Game.spawns['Spawn1'].spawnCreep(getBestBody('upgrader', room.energyAvailable), '🎯' + creepname, {memory: {role: 'upgrader', originalRole: 'upgrader'}});
+        }else if (numFillers < quota_filler && room.energyAvailable >= 150) {
+            Game.spawns['Spawn1'].spawnCreep([CARRY, CARRY, MOVE], '🚚' + creepname, {memory: {role: 'filler', originalRole: 'filler'}});
         }
     }
     
@@ -194,6 +199,9 @@ module.exports.loop = function() {
         }
         else if (creep.memory.role == 'upgrader') {
             roleUpgrader.run(creep, recoveryMode)
+        }
+        else if (creep.memory.role == 'filler') {
+            roleFiller.run(creep);
         }
     }
 

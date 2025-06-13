@@ -90,7 +90,7 @@ function goToParking(creep, opts = {}) {
         parkingPos = new RoomPosition(opts.spot.x, opts.spot.y, opts.spot.roomName);
     } else if (Game.spawns['Spawn1']) {
         let spawn = Game.spawns['Spawn1'];
-        parkingPos = new RoomPosition(spawn.pos.x, spawn.pos.y - 4, spawn.pos.roomName);
+        parkingPos = new RoomPosition(spawn.pos.x, spawn.pos.y + 8, spawn.pos.roomName);
     } else {
         parkingPos = creep.pos;
     }

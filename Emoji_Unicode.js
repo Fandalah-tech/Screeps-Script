@@ -24,4 +24,5 @@ Autres :
        Builder : 🏗️
        Repairer : 🔧
        Upgrader : 🎯
+       Filler : 🚚
 */            

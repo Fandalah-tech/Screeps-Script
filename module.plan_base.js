@@ -3,12 +3,12 @@
 // Tableau de layout à l'extérieur pour éviter les problèmes de scope
 const LAYOUT = [
     //   dx, dy,    type
-    [-3, 3, "route"], [-2, 3, "E"], [-1, 3, "E"], [0, 3, ""], [1, 3, "E"], [2, 3, "E"], [3, 3, "route"],
+    [-3, 3, "route"], [-2, 3, "E"], [-1, 3, "E"], [0, 3, "E"], [1, 3, "E"], [2, 3, "E"], [3, 3, "route"],
     [-3, 2, "E"], [-2, 2, "route"], [-1, 2, "E"], [0, 2, "Tour1"], [1, 2, "E"], [2, 2, "route"], [3, 2, "E"],
     [-3, 1, "E"], [-2, 1, "E"], [-1, 1, "route"], [0, 1, "E"], [1, 1, "route"], [2, 1, "E"], [3, 1, "E"],
-    [-3, 0, ""], [-2, 0, "E"], [-1, 0, "E"], [0, 0, "route"], [1, 0, "E"], [2, 0, "E"], [3, 0, ""],
+    [-3, 0, "Tour2"], [-2, 0, "E"], [-1, 0, "E"], [0, 0, "route"], [1, 0, "E"], [2, 0, "E"], [3, 0, "E"],
     [-3, -1, "E"], [-2, -1, "E"], [-1, -1, "route"], [0, -1, "E"], [1, -1, "route"], [2, -1, "E"], [3, -1, "E"],
-    [-3, -2, "E"], [-2, -2, "route"], [-1, -2, "E"], [0, -2, "Storage"], [1, -2, "E"], [2, -2, "route"], [3, -2, "E"],
+    [-3, -2, "E"], [-2, -2, "route"], [-1, -2, ""], [0, -2, "Storage"], [1, -2, ""], [2, -2, "route"], [3, -2, "E"],
     [-3, -3, "route"], [-2, -3, "E"], [-1, -3, "E"], [0, -3, ""], [1, -3, "E"], [2, -3, "E"], [3, -3, "route"],
 ];
 
@@ -57,6 +57,14 @@ function planBase(spawn, storagePos = null) {
                 room.createConstructionSite(x, y, STRUCTURE_STORAGE);
             }
         } else if (type === "Tour1" && room.controller.level >= 3) {
+            if (
+                !room.lookForAt(LOOK_STRUCTURES, x, y).some(s => s.structureType === STRUCTURE_TOWER) &&
+                !room.lookForAt(LOOK_CONSTRUCTION_SITES, x, y).some(s => s.structureType === STRUCTURE_TOWER) &&
+                isPathAccessible(room, x, y, points)
+            ) {
+                room.createConstructionSite(x, y, STRUCTURE_TOWER);
+            }
+        } else if (type === "Tour2" && room.controller.level >= 5) {
             if (
                 !room.lookForAt(LOOK_STRUCTURES, x, y).some(s => s.structureType === STRUCTURE_TOWER) &&
                 !room.lookForAt(LOOK_CONSTRUCTION_SITES, x, y).some(s => s.structureType === STRUCTURE_TOWER) &&
