@@ -330,12 +330,23 @@ const build_manager = {
     runRampart: function (spawn) {
         const room = spawn.room;
         const rcl = room.controller.level;
+    
+        // === NOUVEAU PATCH : Limite la pose si ramparts trop faibles ===
+        const MIN_RAMPART_HP = 10000; // Seuil à atteindre avant de poser un nouveau
+        let ramparts = room.find(FIND_STRUCTURES, { filter: s => s.structureType === STRUCTURE_RAMPART });
+        let tooLow = ramparts.filter(r => r.hits < MIN_RAMPART_HP);
+    
+        if (tooLow.length > 0) {
+            // Si au moins un rampart est sous le seuil, on attend avant d'en poser d'autres
+            // (Tu peux mettre un log ici si tu veux debug)
+            return;
+        }
+    
         // spawn
         let hasRampart = room.lookForAt(LOOK_STRUCTURES, spawn.pos.x, spawn.pos.y).some(s => s.structureType === STRUCTURE_RAMPART);
         let hasSite = room.lookForAt(LOOK_CONSTRUCTION_SITES, spawn.pos.x, spawn.pos.y).some(s => s.structureType === STRUCTURE_RAMPART);
         let hasRuin = room.lookForAt(LOOK_RUINS, spawn.pos.x, spawn.pos.y).some(r => r.structure.structureType === STRUCTURE_RAMPART);
         if (!hasRampart && !hasSite && !hasRuin) {
-            
             let result = room.createConstructionSite(spawn.pos.x, spawn.pos.y, STRUCTURE_RAMPART);
             if (result === OK) {
                 console.log('Rampart construction site placed on spawn at', spawn.pos.x, spawn.pos.y);
@@ -392,7 +403,7 @@ const build_manager = {
                 }
             }
         }
-    },
+    }
 };
 
 module.exports = build_manager;

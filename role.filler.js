@@ -18,17 +18,20 @@ module.exports = {
                     (s.structureType === STRUCTURE_EXTENSION || s.structureType === STRUCTURE_SPAWN) &&
                     s.store.getFreeCapacity(RESOURCE_ENERGY) > 0
             });
-            if (targets.length > 0) {
-                // Va vers la structure la moins pleine en priorité
-                targets.sort((a, b) => a.store[RESOURCE_ENERGY] - b.store[RESOURCE_ENERGY]);
-                if (creep.transfer(targets[0], RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-                    creep.moveTo(targets[0], { visualizePathStyle: { stroke: "#ffaa00" } });
-                }
-                return;
+        if (targets.length > 0) {
+            // Dépose, normal
+            targets.sort((a, b) => a.store[RESOURCE_ENERGY] - b.store[RESOURCE_ENERGY]);
+            if (creep.transfer(targets[0], RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+                creep.moveTo(targets[0], { visualizePathStyle: { stroke: "#ffaa00" } });
             }
-            // Si tout est plein, va en parking !
-            goToParking(creep, {role: 'filler'});
             return;
+        }
+        
+        // Ici, TOUT est plein
+        // => 1. Passe en mode "non-filling" (comme s'il était vide)
+        creep.memory.filling = false;
+        goToParking(creep, {role: 'filler'});
+        return;
         }
 
         // PHASE DE RECHARGE (uniquement storage)

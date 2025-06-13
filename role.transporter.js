@@ -124,7 +124,23 @@ module.exports = {
                 }
                 return;
             }
-            // 3. Towers non pleines (si non mission emergency)
+            
+            // 2.5 Container près du controller (priorité si pas plein)
+            let controllerContainer = creep.room.find(FIND_STRUCTURES, {
+                filter: s =>
+                    s.structureType === STRUCTURE_CONTAINER &&
+                    s.pos.getRangeTo(creep.room.controller) <= 3 && // Rayon configurable
+                    s.store.getFreeCapacity(RESOURCE_ENERGY) > 0
+            })[0];
+            
+            if (controllerContainer) {
+                if (creep.transfer(controllerContainer, RESOURCE_ENERGY) == ERR_NOT_IN_RANGE) {
+                    creep.moveTo(controllerContainer, {visualizePathStyle: {stroke: '#00ff00'}});
+                }
+                return;
+            }
+            
+                        // 3. Towers non pleines (si non mission emergency)
             let towersToFill = creep.room.find(FIND_MY_STRUCTURES, {
                 filter: s =>
                     s.structureType === STRUCTURE_TOWER &&

@@ -1,6 +1,10 @@
 module.exports = {
     logRoomStatus: function(room, quotas) {
         
+        let storage = room.find(FIND_STRUCTURES, { filter: s => s.structureType === STRUCTURE_STORAGE  })[0];
+        let storageEnergy = storage ? storage.store[RESOURCE_ENERGY] : 0;
+        let storagePct = storage ? ((storage.store[RESOURCE_ENERGY] / 1000000) * 100).toFixed(1) : "0";
+
         console.log('📊 STATS 📊 ');
         
         let allRoles = ['harvester', 'builder', 'upgrader', 'repairer', 'transporter', 'superharvester'];
@@ -40,10 +44,7 @@ module.exports = {
         let totalCreeps = _.sum(Game.creeps, c => c.room.name === room.name);
 
         // Log final
-        console.log(
-            ` ${statusEmoji} Room ${room.name} | RCL${ctrl.level} (${rcPct}%) | Energy: ${room.energyAvailable}/${room.energyCapacityAvailable} | Ratios: ${rolesDisplay} | Total : ${totalCreeps} creeps`
-        );
-    },
+    console.log( `${statusEmoji} Room ${room.name} | RCL${ctrl.level} (${rcPct}%) | Energy: ${room.energyAvailable}/${room.energyCapacityAvailable} | Storage: ${storageEnergy} (${storagePct}%) | Ratios: ${rolesDisplay} | Total : ${totalCreeps} creeps`); },
 
     logCreepDetails: function(room) {
         for (let name in Game.creeps) {

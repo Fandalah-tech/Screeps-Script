@@ -40,24 +40,24 @@ module.exports = {
         }
 
         // === PHASE RECHARGE ===
-        // 1. Containers/storage d’abord
-        let containers = room.find(FIND_STRUCTURES, {
-            filter: s => s.structureType === STRUCTURE_CONTAINER && s.store[RESOURCE_ENERGY] > 0
-        });
+        // 1. Container dédié près du controller
+        let ctrlContainer = room.find(FIND_STRUCTURES, {
+            filter: s =>
+                s.structureType === STRUCTURE_CONTAINER &&
+                s.store[RESOURCE_ENERGY] > 0 &&
+                s.pos.getRangeTo(room.controller) <= 3 // Ajuste le rayon si nécessaire
+        })[0];
+        
         let storages = room.find(FIND_STRUCTURES, {
             filter: s => s.structureType === STRUCTURE_STORAGE && s.store[RESOURCE_ENERGY] > 0
         });
-
+        
         let best = null;
-        if (containers.length > 0) {
-            containers.sort((a, b) => b.store[RESOURCE_ENERGY] - a.store[RESOURCE_ENERGY]);
-            best = containers[0];
-        }
-        if (storages.length > 0) {
+        if (ctrlContainer) {
+            best = ctrlContainer;
+        } else if (storages.length > 0) {
             storages.sort((a, b) => b.store[RESOURCE_ENERGY] - a.store[RESOURCE_ENERGY]);
-            if (!best || storages[0].store[RESOURCE_ENERGY] > best.store[RESOURCE_ENERGY]) {
-                best = storages[0];
-            }
+            best = storages[0];
         }
 
         // 2. À partir de RC3 et si énergie suffisante, autorise le spawn/extensions
