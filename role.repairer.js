@@ -2,16 +2,17 @@ const { goToParking } = require('module.utils');
 
 module.exports = {
     run: function(creep, recoveryMode) {
-        
         if (recoveryMode) {
-            goToParking(creep, {role: 'upgrader'}); // ou 'repairer'
+            goToParking(creep, {role: 'repairer'});
             return;
         }
 
-        if (creep.memory.repairing && creep.store[RESOURCE_ENERGY] == 0) {
+        // PHASE : SWITCH REPARATION/RECHARGE
+        if (creep.memory.repairing && creep.store[RESOURCE_ENERGY] === 0) {
             creep.memory.repairing = false;
+            creep.memory.repairTargetId = undefined;
         }
-        if (!creep.memory.repairing && creep.store.getFreeCapacity(RESOURCE_ENERGY) == 0) {
+        if (!creep.memory.repairing && creep.store.getFreeCapacity(RESOURCE_ENERGY) === 0) {
             creep.memory.repairing = true;
         }
 
@@ -20,7 +21,7 @@ module.exports = {
             const initialThreshold = 10000;
             const repairThreshold = 5000;
 
-            // Initialisation: tant qu'un rempart/mur < 10k, on est en phase initiale
+            // Initialisation : tant qu'un rempart/mur < 10k, on est en phase initiale
             if (!Memory.wallsInitialized) {
                 let lowest = creep.room.find(FIND_STRUCTURES, {
                     filter: s => (s.structureType === STRUCTURE_RAMPART || s.structureType === STRUCTURE_WALL)
@@ -30,18 +31,18 @@ module.exports = {
                 }
             }
 
-            // Recherche de la cible
+            // Recherche de la cible à réparer
             if (!creep.memory.repairTargetId) {
                 let newTarget;
                 if (!Memory.wallsInitialized) {
-                    // Phase initiale: tout à 10k
+                    // Phase initiale : tout à 10k
                     newTarget = creep.room.find(FIND_STRUCTURES, {
                         filter: s =>
                             (s.structureType === STRUCTURE_RAMPART || s.structureType === STRUCTURE_WALL) &&
                             s.hits < initialThreshold
                     }).sort((a, b) => a.hits - b.hits)[0];
                 } else {
-                    // Routine: répare tout < 5k, et monte à 10k
+                    // Routine : remonte ramparts/walls à 5k, puis monte à 10k
                     newTarget = creep.room.find(FIND_STRUCTURES, {
                         filter: s =>
                             (s.structureType === STRUCTURE_RAMPART || s.structureType === STRUCTURE_WALL) &&
@@ -53,33 +54,46 @@ module.exports = {
                 }
             }
 
-            // Cible courante (peut être un rempart/mur sous 10k)
             let target = creep.memory.repairTargetId ? Game.getObjectById(creep.memory.repairTargetId) : null;
 
-            // --- PATCH CRITIQUE : reset si cible morte ou réparée ---
-            if (!target ||
-                (target.structureType === STRUCTURE_RAMPART || target.structureType === STRUCTURE_WALL)
-                    && target.hits >= initialThreshold
-                ||
-                (target.structureType !== STRUCTURE_RAMPART && target.structureType !== STRUCTURE_WALL)
-                    && target.hits >= target.hitsMax
-            ) {
+            // --- PATCH ANTI-OSCILLATION : rien à réparer, park même plein ---
+            if (!target) {
+                creep.memory.repairing = false; // Reset state pour sortir de la boucle inutile
                 creep.memory.repairTargetId = undefined;
                 goToParking(creep, {role: 'repairer'});
                 return;
             }
 
-            if (target && (target.structureType === STRUCTURE_RAMPART || target.structureType === STRUCTURE_WALL)) {
-                if (target.hits < initialThreshold) {
-                    if (creep.repair(target) == ERR_NOT_IN_RANGE) {
-                        creep.moveTo(target, {visualizePathStyle: {stroke: '#aaffaa'}});
-                    }
+            // Si la cible est réparée/morte, reset
+            if (
+                (target.structureType === STRUCTURE_RAMPART || target.structureType === STRUCTURE_WALL) &&
+                target.hits >= initialThreshold
+            ) {
+                creep.memory.repairTargetId = undefined;
+                // Vérifie s'il reste d'autres cibles, sinon park
+                let other = creep.room.find(FIND_STRUCTURES, {
+                    filter: s =>
+                        (s.structureType === STRUCTURE_RAMPART || s.structureType === STRUCTURE_WALL) &&
+                        s.hits < initialThreshold
+                })[0];
+                if (!other) {
+                    creep.memory.repairing = false;
+                    goToParking(creep, {role: 'repairer'});
                     return;
-                } else {
-                    creep.memory.repairTargetId = undefined;
                 }
             }
 
+            // Réparation active
+            if (target && (target.structureType === STRUCTURE_RAMPART || target.structureType === STRUCTURE_WALL)) {
+                if (target.hits < initialThreshold) {
+                    if (creep.repair(target) === ERR_NOT_IN_RANGE) {
+                        creep.moveTo(target, {visualizePathStyle: {stroke: '#aaffaa'}});
+                    }
+                    return;
+                }
+            }
+
+            // Autres cibles (routes, containers, etc.)
             if (!target || target.hits >= initialThreshold) {
                 target = creep.pos.findClosestByPath(FIND_STRUCTURES, {
                     filter: s => s.hits < s.hitsMax &&
@@ -90,75 +104,74 @@ module.exports = {
             }
 
             if (target && target.hits < target.hitsMax) {
-                if (creep.repair(target) == ERR_NOT_IN_RANGE) {
+                if (creep.repair(target) === ERR_NOT_IN_RANGE) {
                     creep.moveTo(target, {visualizePathStyle: {stroke: '#aaffaa'}});
                 }
+                return;
             }
+
+            // Si vraiment rien à faire, park (anti-oscillation)
             if (!target) {
+                creep.memory.repairing = false;
                 goToParking(creep, {role: 'repairer'});
                 return;
             }
+        }
+
+        // --- PHASE RECHARGE ---
+        // Si plein et pas de cible à réparer, park !
+        if (creep.store.getFreeCapacity(RESOURCE_ENERGY) === 0 && !creep.memory.repairTargetId) {
+            goToParking(creep, {role: 'repairer'});
             return;
         }
 
-        // --- PHASE RECHARGE REPAIRER ---
+        // Routine recharge
         let containers = creep.room.find(FIND_STRUCTURES, {
-            filter: s => s.structureType === STRUCTURE_CONTAINER
+            filter: s => s.structureType === STRUCTURE_CONTAINER && s.store[RESOURCE_ENERGY] > 0
         });
-        let totalCapacity = containers.reduce((sum, c) => sum + c.store.getCapacity(RESOURCE_ENERGY), 0);
-        let totalStored   = containers.reduce((sum, c) => sum + c.store[RESOURCE_ENERGY], 0);
-        let containersEmptyOrLow = (containers.length === 0) || (totalStored < 0.10 * totalCapacity);
-
-        let canWithdrawFromSpawn = (!recoveryMode);
-
-        if (!creep.memory.energyTargetId) {
-            let containerTargets = creep.room.find(FIND_STRUCTURES, {
-                filter: s => s.structureType === STRUCTURE_CONTAINER && s.store[RESOURCE_ENERGY] > 0
+        let storageTargets = creep.room.find(FIND_STRUCTURES, {
+            filter: s => s.structureType === STRUCTURE_STORAGE && s.store[RESOURCE_ENERGY] > 0
+        });
+        let spawnsExtensions = [];
+        if (!recoveryMode) {
+            spawnsExtensions = creep.room.find(FIND_STRUCTURES, {
+                filter: s =>
+                    (s.structureType === STRUCTURE_EXTENSION ||
+                     s.structureType === STRUCTURE_SPAWN) &&
+                    s.store[RESOURCE_ENERGY] > 0
             });
-            let storageTargets = creep.room.find(FIND_STRUCTURES, {
-                filter: s => s.structureType === STRUCTURE_STORAGE && s.store[RESOURCE_ENERGY] > 0
+        }
+        let scored = [];
+        containers.forEach(container => {
+            let assigned = _.sum(Game.creeps, c => c.memory.energyTargetId == container.id);
+            scored.push({
+                target: container,
+                score: container.store[RESOURCE_ENERGY] - assigned * 50
             });
-            let spawnsExtensions = [];
-            if (canWithdrawFromSpawn) {
-                spawnsExtensions = creep.room.find(FIND_STRUCTURES, {
-                    filter: s =>
-                        (s.structureType === STRUCTURE_EXTENSION ||
-                         s.structureType === STRUCTURE_SPAWN) &&
-                        s.store[RESOURCE_ENERGY] > 0
-                });
-            }
-            let scored = [];
-            containerTargets.forEach(container => {
-                let assigned = _.sum(Game.creeps, c => c.memory.energyTargetId == container.id);
-                scored.push({
-                    target: container,
-                    score: container.store[RESOURCE_ENERGY] - assigned * 50
-                });
+        });
+        storageTargets.forEach(storage => {
+            let assigned = _.sum(Game.creeps, c => c.memory.energyTargetId == storage.id);
+            scored.push({
+                target: storage,
+                score: storage.store[RESOURCE_ENERGY] - assigned * 50
             });
-            storageTargets.forEach(storage => {
-                let assigned = _.sum(Game.creeps, c => c.memory.energyTargetId == storage.id);
-                scored.push({
-                    target: storage,
-                    score: storage.store[RESOURCE_ENERGY] - assigned * 50
-                });
+        });
+        spawnsExtensions.forEach(sx => {
+            let assigned = _.sum(Game.creeps, c => c.memory.energyTargetId == sx.id);
+            scored.push({
+                target: sx,
+                score: (sx.store ? sx.store[RESOURCE_ENERGY] : 0) - assigned * 50
             });
-            spawnsExtensions.forEach(sx => {
-                let assigned = _.sum(Game.creeps, c => c.memory.energyTargetId == sx.id);
-                scored.push({
-                    target: sx,
-                    score: (sx.store ? sx.store[RESOURCE_ENERGY] : 0) - assigned * 50
-                });
-            });
-            if (scored.length > 0) {
-                scored.sort((a, b) => b.score - a.score);
-                if (scored[0].score > 0) {
-                    creep.memory.energyTargetId = scored[0].target.id;
-                }
+        });
+        if (scored.length > 0) {
+            scored.sort((a, b) => b.score - a.score);
+            if (scored[0].score > 0) {
+                creep.memory.energyTargetId = scored[0].target.id;
             }
         }
         let target = creep.memory.energyTargetId ? Game.getObjectById(creep.memory.energyTargetId) : null;
         if (
-            (!canWithdrawFromSpawn && target && (target.structureType === STRUCTURE_SPAWN || target.structureType === STRUCTURE_EXTENSION))
+            (!(!recoveryMode) && target && (target.structureType === STRUCTURE_SPAWN || target.structureType === STRUCTURE_EXTENSION))
         ) {
             creep.memory.energyTargetId = undefined;
             target = null;
@@ -169,14 +182,14 @@ module.exports = {
                 filter: res => res.resourceType === RESOURCE_ENERGY
             });
             if (dropped.length > 0) {
-                if (creep.pickup(dropped[0]) == ERR_NOT_IN_RANGE) {
+                if (creep.pickup(dropped[0]) === ERR_NOT_IN_RANGE) {
                     creep.moveTo(dropped[0], {visualizePathStyle: {stroke: '#ffaa00'}});
                 }
             }
             goToParking(creep, {role: 'repairer'});
             return;
         }
-        if (creep.withdraw(target, RESOURCE_ENERGY) == ERR_NOT_IN_RANGE) {
+        if (creep.withdraw(target, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
             creep.moveTo(target, {visualizePathStyle: {stroke: '#ffaa00'}});
         }
     }

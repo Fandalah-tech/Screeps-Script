@@ -12,12 +12,6 @@ const stats_benchmark = require('stats_benchmark');
 const { getBestBody } = require('module.body_manager');
 const tower_manager = require('module.tower_manager');
 
-if (!Memory.creepCounter) Memory.creepCounter = 0;
-function getNextCreepId() {
-    Memory.creepCounter = (Memory.creepCounter + 1) % 2000;
-    return Memory.creepCounter;
-}
-
 // === Fonction de "softlock" et d'urgence ===
 function isCriticalContainerMissing(room, sources) {
     // True si un container manque près d'une source (PAS le controller pour recovery SH/T)
@@ -62,7 +56,6 @@ module.exports.loop = function() {
     let ctrlLevel = room.controller.level;
     let totalEnergy = room.energyAvailable;
     let totalCapacity = room.energyCapacityAvailable;
-    let creepname = getNextCreepId();
     let spawn = Game.spawns['Spawn1'];
 
     // Comptage de stockage
@@ -141,43 +134,54 @@ module.exports.loop = function() {
     
     let canSpawn = !spawn.spawning; // Vérifie si le spawn est libre
 
-    if (canSpawn) {
-        
+     if (canSpawn) {
+        if (!Memory.creepId) Memory.creepId = 1;
+    
+        // Helper pour générer un nom unique et incrémenter si succès
+        function spawnWithId(spawn, body, namePrefix, mem) {
+            let creepId = Memory.creepId;
+            let ret = spawn.spawnCreep(body, namePrefix + creepId, mem);
+            if (ret === OK) {
+                Memory.creepId++;
+                if (Memory.creepId > 999) Memory.creepId = 1;
+            }
+            return ret;
+        }
+    
         // En recovery : spawn d'abord un SH solide (>=400 énergie) pour relancer la prod d'énergie.
-        // Ne spawn un Harvester mini qu'en cas de crise extrême (>=200 énergie), pour éviter le softlock.
-        
-        // Sécurité recovery stricte
         if (recoveryMode && numSuperHarvester < quota_superharvester && room.energyAvailable >= 400) {
-            Game.spawns['Spawn1'].spawnCreep(getBestBody('superharvester', room.energyAvailable), '⛏️⛏️' + creepname, {memory: {role: 'superharvester', originalRole: 'superharvester'}});
+            spawnWithId(Game.spawns['Spawn1'], getBestBody('superharvester', room.energyAvailable), '⛏️⛏️', {memory: {role: 'superharvester', originalRole: 'superharvester'}});
             return;
         }
         // Sécurité recovery ultra stricte
         if ((numHarvesters + numSuperHarvester) < sources.length && room.energyAvailable >= 200) {
-            Game.spawns['Spawn1'].spawnCreep(getBestBody('harvester', room.energyAvailable), '⛏️⚠️' + creepname, {memory: {role: 'harvester', originalRole: 'harvester'}});
+            spawnWithId(Game.spawns['Spawn1'], getBestBody('harvester', room.energyAvailable), '⛏️⚠️', {memory: {role: 'harvester', originalRole: 'harvester'}});
             return;
         }
         // Production normale selon quotas
         if (numHarvesters < quota_harvester) {
-            Game.spawns['Spawn1'].spawnCreep(getBestBody('harvester', room.energyAvailable), '⛏️' + creepname, {memory: {role: 'harvester', originalRole: 'harvester'}});
+            spawnWithId(Game.spawns['Spawn1'], getBestBody('harvester', room.energyAvailable), '⛏️', {memory: {role: 'harvester', originalRole: 'harvester'}});
         }
-        else if (numSuperHarvester < quota_superharvester && room.energyAvailable >= 0.75 * room.energyCapacityAvailable) {
-            Game.spawns['Spawn1'].spawnCreep(getBestBody('superharvester', room.energyAvailable), '⛏️⛏️' + creepname, {memory: {role: 'superharvester', originalRole: 'superharvester'}});
+        else if (numSuperHarvester < quota_superharvester && room.energyAvailable >= 0.5 * room.energyCapacityAvailable) {
+            spawnWithId(Game.spawns['Spawn1'], getBestBody('superharvester', room.energyAvailable), '⛏️⛏️', {memory: {role: 'superharvester', originalRole: 'superharvester'}});
         }
         else if (numTransporter < quota_transporter && room.energyAvailable >= 0.5 * room.energyCapacityAvailable) {
-            Game.spawns['Spawn1'].spawnCreep(getBestBody('transporter', room.energyAvailable), '🛒' + creepname, {memory: {role: 'transporter', originalRole: 'transporter'}});
+            spawnWithId(Game.spawns['Spawn1'], getBestBody('transporter', room.energyAvailable), '🛒', {memory: {role: 'transporter', originalRole: 'transporter'}});
         }
-        else if (numBuilders < quota_builder && room.energyAvailable >= 0.75 * room.energyCapacityAvailable) {
-            Game.spawns['Spawn1'].spawnCreep(getBestBody('builder', room.energyAvailable), '🏗️️' + creepname, {memory: {role: 'builder', originalRole: 'builder'}});
+        else if (numBuilders < quota_builder && room.energyAvailable >= 0.5 * room.energyCapacityAvailable) {
+            spawnWithId(Game.spawns['Spawn1'], getBestBody('builder', room.energyAvailable), '🏗️️', {memory: {role: 'builder', originalRole: 'builder'}});
         }
         else if (numRepairers < quota_repairers && room.energyAvailable >= 0.5 * room.energyCapacityAvailable) {
-            Game.spawns['Spawn1'].spawnCreep(getBestBody('repairer', room.energyAvailable), '🔧' + creepname, {memory: {role: 'repairer', originalRole: 'repairer'}});
+            spawnWithId(Game.spawns['Spawn1'], getBestBody('repairer', room.energyAvailable), '🔧', {memory: {role: 'repairer', originalRole: 'repairer'}});
         }
         else if (numUpgraders < quota_upgrader && room.energyAvailable >= 0.5 * room.energyCapacityAvailable) {
-            Game.spawns['Spawn1'].spawnCreep(getBestBody('upgrader', room.energyAvailable), '🎯' + creepname, {memory: {role: 'upgrader', originalRole: 'upgrader'}});
-        }else if (numFillers < quota_filler && room.energyAvailable >= 150) {
-            Game.spawns['Spawn1'].spawnCreep([CARRY, CARRY, MOVE], '🚚' + creepname, {memory: {role: 'filler', originalRole: 'filler'}});
+            spawnWithId(Game.spawns['Spawn1'], getBestBody('upgrader', room.energyAvailable), '🎯', {memory: {role: 'upgrader', originalRole: 'upgrader'}});
+        }
+        else if (numFillers < quota_filler && room.energyAvailable >= 150) {
+            spawnWithId(Game.spawns['Spawn1'], [CARRY, CARRY, MOVE], '🚚', {memory: {role: 'filler', originalRole: 'filler'}});
         }
     }
+
     
     // --- Dispatch des rôles ---
     for (let name in Game.creeps) {
