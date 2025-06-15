@@ -202,15 +202,16 @@ module.exports.loop = function() {
                 break;
             }
         
-            // Remote Builder (optionnel, un seul pour finir les sites dans la remote)
+            // Remote Builder (optionnel, deux si beaucoup de boulot)
             let remoteBuilders = _.filter(Game.creeps, c =>
                 c.memory.role === 'remoteBuilder' &&
                 c.memory.targetRoom === remote.targetRoom
             );
-            // Spawn seulement s'il y a des sites de construction dans la remote
             let roomObj = Game.rooms[remote.targetRoom];
             let sites = roomObj ? roomObj.find(FIND_CONSTRUCTION_SITES) : [];
-            if (sites.length > 0 && remoteBuilders.length === 0 && Game.spawns['Spawn1'].spawning === null) {
+            let totalProgress = sites.reduce((sum, s) => sum + (s.progressTotal - s.progress), 0);
+            // Par exemple, si beaucoup de points à remplir, spawn jusqu'à 2 builders
+            if (sites.length > 0 && remoteBuilders.length < 2 && totalProgress > 1500 && Game.spawns['Spawn1'].spawning === null) {
                 Game.spawns['Spawn1'].spawnCreep(
                     [WORK, CARRY, MOVE, MOVE],
                     'RB-' + Game.time,
