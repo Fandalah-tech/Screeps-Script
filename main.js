@@ -75,6 +75,9 @@ module.exports.loop = function() {
     let numRepairers       = _.sum(Game.creeps, c => c.memory.role == 'repairer');
     let numUpgraders       = _.sum(Game.creeps, c => c.memory.role == 'upgrader');
     let numFillers       = _.sum(Game.creeps, c => c.memory.role == 'filler');
+    let numRemoteHarvester       = _.sum(Game.creeps, c => c.memory.role == 'remoteharvester');
+    let numRemoteTransporter       = _.sum(Game.creeps, c => c.memory.role == 'remotetransporter');
+    let numRemoteBuilder       = _.sum(Game.creeps, c => c.memory.role == 'remotebuilder');
     
     // === Quotas dynamiques ===
     let quota_harvester = sources.length;
@@ -84,6 +87,9 @@ module.exports.loop = function() {
     let quota_repairers = 1;
     let quota_upgrader = Math.min(ctrlLevel, 4); // plafonne à 4 U, adapte si besoin
     let quota_filler = 1;
+    let quota_remoteharvester = 1;
+    let quota_remotetransporter = 1;
+    let quota_remotebuilder = 2;
 
     // 1. Nombre de sources avec container
     let sourcesWithContainer = sources.filter(source =>
@@ -127,7 +133,11 @@ module.exports.loop = function() {
     upgrader: quota_upgrader,
     repairer: quota_repairers,
     transporter: quota_transporter,
-    superharvester: quota_superharvester
+    superharvester: quota_superharvester,
+    filler: quota_filler,
+    remoteharvester: quota_remoteharvester,
+    remotetransporter: quota_remotetransporter,
+    remotebuilder: quota_remotebuilder
     };
     
     // Flag recoveryMode global
@@ -164,7 +174,7 @@ module.exports.loop = function() {
         for (let remote of remoteConfig) {
             // Remote Harvester
             let remoteHarvesters = _.filter(Game.creeps, c =>
-                c.memory.role === 'remoteHarvester' &&
+                c.memory.role === 'remoteharvester' &&
                 c.memory.targetRoom === remote.targetRoom &&
                 c.memory.sourceId === remote.sourceId
             );
@@ -173,7 +183,7 @@ module.exports.loop = function() {
                     [WORK, WORK, CARRY, MOVE, MOVE],
                     'RH-' + Game.time,
                     {memory: {
-                        role: 'remoteHarvester',
+                        role: 'remoteharvester',
                         targetRoom: remote.targetRoom,
                         sourceId: remote.sourceId,
                         containerId: remote.containerId
@@ -184,7 +194,7 @@ module.exports.loop = function() {
         
             // Remote Transporter
             let remoteTransporters = _.filter(Game.creeps, c =>
-                c.memory.role === 'remoteTransporter' &&
+                c.memory.role === 'remotetransporter' &&
                 c.memory.targetRoom === remote.targetRoom &&
                 c.memory.containerId === remote.containerId
             );
@@ -193,7 +203,7 @@ module.exports.loop = function() {
                     [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE],
                     'RT-' + Game.time,
                     {memory: {
-                        role: 'remoteTransporter',
+                        role: 'remotetransporter',
                         targetRoom: remote.targetRoom,
                         containerId: remote.containerId,
                         homeRoom: remote.homeRoom
@@ -204,19 +214,19 @@ module.exports.loop = function() {
         
             // Remote Builder (optionnel, deux si beaucoup de boulot)
             let remoteBuilders = _.filter(Game.creeps, c =>
-                c.memory.role === 'remoteBuilder' &&
+                c.memory.role === 'remotebuilder' &&
                 c.memory.targetRoom === remote.targetRoom
             );
             let roomObj = Game.rooms[remote.targetRoom];
             let sites = roomObj ? roomObj.find(FIND_CONSTRUCTION_SITES) : [];
             let totalProgress = sites.reduce((sum, s) => sum + (s.progressTotal - s.progress), 0);
             // Par exemple, si beaucoup de points à remplir, spawn jusqu'à 2 builders
-            if (sites.length > 0 && remoteBuilders.length < 2 && totalProgress > 1500 && Game.spawns['Spawn1'].spawning === null) {
+            if (sites.length > 0 && remoteBuilders.length < 2 && Game.spawns['Spawn1'].spawning === null) {
                 Game.spawns['Spawn1'].spawnCreep(
                     [WORK, CARRY, MOVE, MOVE],
                     'RB-' + Game.time,
                     {memory: {
-                        role: 'remoteBuilder',
+                        role: 'remotebuilder',
                         targetRoom: remote.targetRoom
                     }}
                 );
@@ -284,13 +294,13 @@ module.exports.loop = function() {
         else if (creep.memory.role == 'filler') {
             roleFiller.run(creep);
         }
-        if (creep.memory.role === 'remoteHarvester') {
+        if (creep.memory.role === 'remoteharvester') {
             roleRemoteHarvester.run(creep);
         }
-        else if (creep.memory.role === 'remoteTransporter') {
+        else if (creep.memory.role === 'remotetransporter') {
             roleRemoteTransporter.run(creep);
         }
-        else if (creep.memory.role === 'remoteBuilder') {
+        else if (creep.memory.role === 'remotebuilder') {
             roleRemoteBuilder.run(creep);
         }
     }
@@ -306,8 +316,7 @@ module.exports.loop = function() {
     if (tower_manager && tower_manager.run) tower_manager.run();
 
     // --- LOG ---
-    console_log.logRoomStatus(room, quotas);
-    console_log.logCreepDetails(room);
+    require('module.console_log').logFullRoomStatus(quotas);
 
     // --- BENCHMARK ---
     stats_benchmark.run(room);
