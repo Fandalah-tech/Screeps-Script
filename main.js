@@ -5,6 +5,9 @@ const roleBuilder = require('role.builder');
 const roleRepairer = require('role.repairer');
 const roleUpgrader = require('role.upgrader');
 const roleFiller = require('role.filler');
+const roleRemoteHarvester = require('role.remoteharvester');
+const roleRemoteTransporter = require('role.remotetransporter');
+const roleRemoteBuilder = require('role.remotebuilder');
 const { planBase } = require('module.plan_base');
 const build_manager = require('module.build_manager');
 const console_log = require('module.console_log');
@@ -136,8 +139,8 @@ module.exports.loop = function() {
 
      if (canSpawn) {
         if (!Memory.creepId) Memory.creepId = 1;
-    
-        // Helper pour générer un nom unique et incrémenter si succès
+        
+                // Helper pour générer un nom unique et incrémenter si succès
         function spawnWithId(spawn, body, namePrefix, mem) {
             let creepId = Memory.creepId;
             let ret = spawn.spawnCreep(body, namePrefix + creepId, mem);
@@ -147,6 +150,79 @@ module.exports.loop = function() {
             }
             return ret;
         }
+        
+        // === SPAWN AUTOMATIQUE DES REMOTES (exemple pour une remote) ===
+        const remoteConfig = [
+            {
+                targetRoom: 'E28S16',
+                sourceId: '6845d068b4a6e60029b24f42',
+                containerId: '684d6a4be189a20028779a11',
+                homeRoom: 'E29S16'
+            }
+        ];
+        
+        for (let remote of remoteConfig) {
+            // Remote Harvester
+            let remoteHarvesters = _.filter(Game.creeps, c =>
+                c.memory.role === 'remoteHarvester' &&
+                c.memory.targetRoom === remote.targetRoom &&
+                c.memory.sourceId === remote.sourceId
+            );
+            if (remoteHarvesters.length === 0 && Game.spawns['Spawn1'].spawning === null) {
+                Game.spawns['Spawn1'].spawnCreep(
+                    [WORK, WORK, CARRY, MOVE, MOVE],
+                    'RH-' + Game.time,
+                    {memory: {
+                        role: 'remoteHarvester',
+                        targetRoom: remote.targetRoom,
+                        sourceId: remote.sourceId,
+                        containerId: remote.containerId
+                    }}
+                );
+                break; // Stop la boucle pour éviter double spawn ce tick
+            }
+        
+            // Remote Transporter
+            let remoteTransporters = _.filter(Game.creeps, c =>
+                c.memory.role === 'remoteTransporter' &&
+                c.memory.targetRoom === remote.targetRoom &&
+                c.memory.containerId === remote.containerId
+            );
+            if (remoteTransporters.length === 0 && Game.spawns['Spawn1'].spawning === null) {
+                Game.spawns['Spawn1'].spawnCreep(
+                    [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE],
+                    'RT-' + Game.time,
+                    {memory: {
+                        role: 'remoteTransporter',
+                        targetRoom: remote.targetRoom,
+                        containerId: remote.containerId,
+                        homeRoom: remote.homeRoom
+                    }}
+                );
+                break;
+            }
+        
+            // Remote Builder (optionnel, un seul pour finir les sites dans la remote)
+            let remoteBuilders = _.filter(Game.creeps, c =>
+                c.memory.role === 'remoteBuilder' &&
+                c.memory.targetRoom === remote.targetRoom
+            );
+            // Spawn seulement s'il y a des sites de construction dans la remote
+            let roomObj = Game.rooms[remote.targetRoom];
+            let sites = roomObj ? roomObj.find(FIND_CONSTRUCTION_SITES) : [];
+            if (sites.length > 0 && remoteBuilders.length === 0 && Game.spawns['Spawn1'].spawning === null) {
+                Game.spawns['Spawn1'].spawnCreep(
+                    [WORK, CARRY, MOVE, MOVE],
+                    'RB-' + Game.time,
+                    {memory: {
+                        role: 'remoteBuilder',
+                        targetRoom: remote.targetRoom
+                    }}
+                );
+                break;
+            }
+        }
+
     
         // En recovery : spawn d'abord un SH solide (>=400 énergie) pour relancer la prod d'énergie.
         if (recoveryMode && numSuperHarvester < quota_superharvester && room.energyAvailable >= 400) {
@@ -206,6 +282,15 @@ module.exports.loop = function() {
         }
         else if (creep.memory.role == 'filler') {
             roleFiller.run(creep);
+        }
+        if (creep.memory.role === 'remoteHarvester') {
+            roleRemoteHarvester.run(creep);
+        }
+        else if (creep.memory.role === 'remoteTransporter') {
+            roleRemoteTransporter.run(creep);
+        }
+        else if (creep.memory.role === 'remoteBuilder') {
+            roleRemoteBuilder.run(creep);
         }
     }
 

@@ -7,7 +7,7 @@ module.exports = {
             filter: s => s.structureType === STRUCTURE_TOWER
         });
 
-        let emptyTower = towers.find(t => t.store[RESOURCE_ENERGY] === 0);
+        let emptyTower = towers.find(t => t.store[RESOURCE_ENERGY] < 200);
 
         if (emptyTower) {
             if (!Memory.towerEmergency || !Game.creeps[Memory.towerEmergency] || Game.creeps[Memory.towerEmergency].spawning) {
