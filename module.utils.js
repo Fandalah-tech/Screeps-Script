@@ -97,7 +97,7 @@ function goToParking(creep, opts = {}) {
     if (!creep.pos.isEqualTo(parkingPos)) {
         creep.moveTo(parkingPos, { visualizePathStyle: { stroke: '#cccccc' } });
     }
-    creep.say('🚗 park');
+    creep.say('🚗');
 }
 
 module.exports = {

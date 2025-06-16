@@ -3,8 +3,15 @@ const { goToParking } = require('module.utils');
 module.exports = {
     run: function(creep, recoveryMode) {
         
+        const room = creep.room;
+        
         if (recoveryMode) {
             require('module.utils').goToParking(creep, {role: 'builder'});
+            return;
+        }
+        
+        if (_.sum(Game.creeps, c => ['harvester', 'superharvester'].includes(c.memory.role)) === 0) {
+            goToParking(creep, {role: 'builder'});
             return;
         }
         
@@ -80,7 +87,10 @@ module.exports = {
         let containersEmptyOrLow = (containers.length === 0) || (totalStored < 0.10 * totalCapacity);
 
         // Builder peut piocher dans spawn/extensions seulement en recovery ou containers vides/absents
-        let canWithdrawFromSpawn = (!recoveryMode) || (recoveryMode && containersEmptyOrLow);
+        let canWithdrawFromSpawn = (
+            (!recoveryMode && room.controller.level >= 3) ||
+            (recoveryMode && containersEmptyOrLow)
+        );
 
         if (!creep.memory.energyTargetId) {
             let containerTargets = creep.room.find(FIND_STRUCTURES, {
@@ -161,6 +171,16 @@ module.exports = {
                     return;
                 }
             }
+            
+            // Fallback : miner soi-même si rien d’autre
+            let source = creep.pos.findClosestByPath(FIND_SOURCES_ACTIVE);
+            if (source) {
+                if (creep.harvest(source) == ERR_NOT_IN_RANGE) {
+                    creep.moveTo(source, {visualizePathStyle: {stroke: '#aaffaa'}});
+                }
+                return;
+            }
+            
             goToParking(creep, {role: 'builder'});
             return;
         }

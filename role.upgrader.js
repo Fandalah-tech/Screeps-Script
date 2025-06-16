@@ -24,9 +24,10 @@ module.exports = {
         let energyAvailable = room.energyAvailable;
         let energyCapacity = room.energyCapacityAvailable;
 
-        if (creep.store[RESOURCE_ENERGY] === 0) {
+        if (creep.memory.upgrading && creep.store[RESOURCE_ENERGY] === 0) {
             creep.memory.upgrading = false;
-        } else {
+        }
+        if (!creep.memory.upgrading && creep.store.getFreeCapacity(RESOURCE_ENERGY) === 0) {
             creep.memory.upgrading = true;
         }
 

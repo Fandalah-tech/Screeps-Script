@@ -65,6 +65,7 @@ module.exports = {
                 if (a.structureType !== STRUCTURE_ROAD && b.structureType === STRUCTURE_ROAD) return 1;
                 return 0;
             });
+            creep.memory.buildSiteId = sites[0].id;
             if (creep.build(sites[0]) === ERR_NOT_IN_RANGE) {
                 creep.moveTo(sites[0], {reusePath: 10});
             }
@@ -73,6 +74,11 @@ module.exports = {
 
         // 4. Si rien à construire, park dans la remote
         goToParking(creep, {role: 'remotebuilder'});
+        if (sites.length === 0) {
+            delete creep.memory.buildSiteId;
+            goToParking(creep, {role: 'remotebuilder'});
+            return;
+        }
     }
 };
 
