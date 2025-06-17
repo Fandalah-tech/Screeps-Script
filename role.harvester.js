@@ -1,55 +1,57 @@
-const { goToParking } = require('module.utils');
+const { goToParking, getFreeSpacesAroundSource } = require('module.utils');
 
 module.exports = {
-    run: function(creep, recoveryMode) {
-        // PHASE DE MINAGE CLASSIQUE
-        if (creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
-            let source;
-            if (!creep.memory.sourceId) {
-                source = creep.pos.findClosestByPath(FIND_SOURCES_ACTIVE);
-                if (source) creep.memory.sourceId = source.id;
-            } else {
-                source = Game.getObjectById(creep.memory.sourceId);
-            }
-            if (source) {
-                if (creep.harvest(source) == ERR_NOT_IN_RANGE) {
-                    creep.moveTo(source, {visualizePathStyle: {stroke: '#ffaa00'}});
+    run: function(creep) {
+        // Nouvelle attribution avec vérification des slots libres
+        if (!creep.memory.sourceId || !creep.memory.targetPos) {
+            const sources = creep.room.find(FIND_SOURCES);
+            for (let source of sources) {
+                const spots = getFreeSpacesAroundSource(source);
+                for (let pos of spots) {
+                    const taken = _.some(Game.creeps, c =>
+                        c.name !== creep.name &&
+                        (c.memory.role === 'harvester' || c.memory.role === 'superharvester') &&
+                        c.memory.targetPos &&
+                        c.memory.targetPos.x === pos.x &&
+                        c.memory.targetPos.y === pos.y &&
+                        c.memory.sourceId === source.id
+                    );
+                    if (!taken) {
+                        creep.memory.sourceId = source.id;
+                        creep.memory.targetPos = { x: pos.x, y: pos.y, roomName: source.room.name };
+                        break;
+                    }
                 }
-            }
-        } else {
-            // Dépose d'abord dans extensions/spawn, puis container sinon
-            let targets = creep.room.find(FIND_STRUCTURES, {
-                filter: s =>
-                    (s.structureType === STRUCTURE_EXTENSION ||
-                     s.structureType === STRUCTURE_SPAWN) &&
-                    s.store.getFreeCapacity(RESOURCE_ENERGY) > 0
-            });
-            if (targets.length > 0) {
-                if (creep.transfer(targets[0], RESOURCE_ENERGY) == ERR_NOT_IN_RANGE) {
-                    creep.moveTo(targets[0], {visualizePathStyle: {stroke: '#ffffff'}});
-                }
-            } else {
-                // Si pas de place, dépose dans container à portée 1 (sécurité)
-                let containers = creep.pos.findInRange(FIND_STRUCTURES, 1, {
-                    filter: s => s.structureType === STRUCTURE_CONTAINER &&
-                                 s.store.getFreeCapacity(RESOURCE_ENERGY) > 0
-                });
-                if (containers.length > 0) {
-                    creep.transfer(containers[0], RESOURCE_ENERGY);
-                } else {
-                    goToParking(creep, {role: 'harvester'});
-                }
+                if (creep.memory.sourceId) break;
             }
         }
 
-        // --- Suicide si vraiment plus utile (optionnel) ---
-        if (
-            _.sum(Game.creeps, c => c.memory.role == 'transporter') > 1 &&
-            _.sum(Game.creeps, c => c.memory.role == 'superharvester') > 1 &&
-            creep.ticksToLive < 500
-        ) {
-            creep.suicide();
+        if (!creep.memory.sourceId || !creep.memory.targetPos) {
+            creep.say('❌ no slot');
+            goToParking(creep, { role: 'harvester' });
             return;
+        }
+
+        const source = Game.getObjectById(creep.memory.sourceId);
+        const targetPos = new RoomPosition(
+            creep.memory.targetPos.x,
+            creep.memory.targetPos.y,
+            creep.memory.targetPos.roomName
+        );
+
+        if (!creep.pos.isEqualTo(targetPos)) {
+            creep.moveTo(targetPos, { visualizePathStyle: { stroke: '#ffaa00' } });
+            return;
+        }
+
+        // HARVEST + drop
+        if (creep.store.getFreeCapacity() === 0) {
+            creep.drop(RESOURCE_ENERGY);
+            return;
+        }
+
+        if (source && creep.harvest(source) === ERR_NOT_IN_RANGE) {
+            creep.moveTo(source, { visualizePathStyle: { stroke: '#ffaa00' } });
         }
     }
 };

@@ -1,98 +1,93 @@
 // module.plan_base.js
 
-// Tableau de layout à l'extérieur pour éviter les problèmes de scope
-const LAYOUT = [
-    //   dx, dy,    type
-    [-3, 3, "route"], [-2, 3, "E"], [-1, 3, "E"], [0, 3, "E"], [1, 3, "E"], [2, 3, "E"], [3, 3, "route"],
-    [-3, 2, "E"], [-2, 2, "route"], [-1, 2, "E"], [0, 2, "Tour1"], [1, 2, "E"], [2, 2, "route"], [3, 2, "E"],
-    [-3, 1, "E"], [-2, 1, "E"], [-1, 1, "route"], [0, 1, "E"], [1, 1, "route"], [2, 1, "E"], [3, 1, "E"],
-    [-3, 0, "Tour2"], [-2, 0, "E"], [-1, 0, "E"], [0, 0, "route"], [1, 0, "E"], [2, 0, "E"], [3, 0, "E"],
-    [-3, -1, "E"], [-2, -1, "E"], [-1, -1, "route"], [0, -1, "E"], [1, -1, "route"], [2, -1, "E"], [3, -1, "E"],
-    [-3, -2, "E"], [-2, -2, "route"], [-1, -2, ""], [0, -2, "Storage"], [1, -2, ""], [2, -2, "route"], [3, -2, "E"],
-    [-3, -3, "route"], [-2, -3, "E"], [-1, -3, "E"], [0, -3, ""], [1, -3, "E"], [2, -3, "E"], [3, -3, "route"],
+const utils = require('module.utils');
+
+const donutLayout = [
+    { dx: 0, dy: 0, type: STRUCTURE_SPAWN },
+    { dx: -1, dy: -1, type: STRUCTURE_EXTENSION },
+    { dx: 0, dy: -1, type: STRUCTURE_EXTENSION },
+    { dx: 1, dy: -1, type: STRUCTURE_EXTENSION },
+    { dx: -1, dy: 0, type: STRUCTURE_EXTENSION },
+    { dx: 1, dy: 0, type: STRUCTURE_EXTENSION },
+    { dx: -1, dy: 1, type: STRUCTURE_EXTENSION },
+    { dx: 0, dy: 1, type: STRUCTURE_EXTENSION },
+    { dx: 1, dy: 1, type: STRUCTURE_EXTENSION },
+    { dx: 0, dy: -2, type: STRUCTURE_EXTENSION },
+    { dx: -2, dy: 0, type: STRUCTURE_EXTENSION },
+    { dx: 2, dy: 0, type: STRUCTURE_EXTENSION },
+    { dx: 0, dy: 2, type: STRUCTURE_EXTENSION },
+    { dx: -1, dy: -2, type: STRUCTURE_ROAD },
+    { dx: 1, dy: -2, type: STRUCTURE_ROAD },
+    { dx: -2, dy: -1, type: STRUCTURE_ROAD },
+    { dx: 2, dy: -1, type: STRUCTURE_ROAD },
+    { dx: -2, dy: 1, type: STRUCTURE_ROAD },
+    { dx: 2, dy: 1, type: STRUCTURE_ROAD },
+    { dx: -1, dy: 2, type: STRUCTURE_ROAD },
+    { dx: 1, dy: 2, type: STRUCTURE_ROAD }
 ];
 
-// Helper : vérifie que tous les chemins sont encore accessibles avec un bâtiment bloqué à (blockX, blockY)
-function isPathAccessible(room, blockX, blockY, points) {
-    let costMatrix = new PathFinder.CostMatrix();
-    costMatrix.set(blockX, blockY, 255); // 255 = impassable
-    for (const [from, to] of points) {
-        let result = PathFinder.search(
-            from,
-            { pos: to, range: 1 },
-            { roomCallback: () => costMatrix, maxOps: 1000 }
-        );
-        if (result.incomplete) return false;
-    }
-    return true;
-}
+module.exports = {
+    plan(room) {
+        const spawn = room.find(FIND_MY_SPAWNS)[0];
+        if (!spawn) return console.log("❌ Aucun spawn trouvé pour planifier la base.");
 
-function planBase(spawn, storagePos = null) {
-    const room = spawn.room;
-    const terrain = room.getTerrain();
+        const sources = room.find(FIND_SOURCES);
+        const controller = room.controller;
+        const plan = [];
 
-    // Points critiques : spawn, controller, sources (+ storage si fourni)
-    let points = [
-        [spawn.pos, room.controller.pos],
-    ];
-    for (let source of room.find(FIND_SOURCES)) {
-        points.push([spawn.pos, source.pos]);
-    }
-    if (storagePos) points.push([spawn.pos, storagePos]);
-
-    for (const [dx, dy, type] of LAYOUT) {
-        const x = spawn.pos.x + dx, y = spawn.pos.y + dy;
-        if (x < 1 || x > 48 || y < 1 || y > 48) continue;
-        if (terrain.get(x, y) === TERRAIN_MASK_WALL) continue;
-
-        // On skip le spawn lui-même (déjà posé)
-        // if (type === "S") continue;
-
-        if (type === "Storage" && room.controller.level >= 4) {
-            if (
-                !room.lookForAt(LOOK_STRUCTURES, x, y).some(s => s.structureType === STRUCTURE_STORAGE) &&
-                !room.lookForAt(LOOK_CONSTRUCTION_SITES, x, y).some(s => s.structureType === STRUCTURE_STORAGE) &&
-                isPathAccessible(room, x, y, points)
-            ) {
-                room.createConstructionSite(x, y, STRUCTURE_STORAGE);
-            }
-        } else if (type === "Tour1" && room.controller.level >= 3) {
-            if (
-                !room.lookForAt(LOOK_STRUCTURES, x, y).some(s => s.structureType === STRUCTURE_TOWER) &&
-                !room.lookForAt(LOOK_CONSTRUCTION_SITES, x, y).some(s => s.structureType === STRUCTURE_TOWER) &&
-                isPathAccessible(room, x, y, points)
-            ) {
-                room.createConstructionSite(x, y, STRUCTURE_TOWER);
-            }
-        } else if (type === "Tour2" && room.controller.level >= 5) {
-            if (
-                !room.lookForAt(LOOK_STRUCTURES, x, y).some(s => s.structureType === STRUCTURE_TOWER) &&
-                !room.lookForAt(LOOK_CONSTRUCTION_SITES, x, y).some(s => s.structureType === STRUCTURE_TOWER) &&
-                isPathAccessible(room, x, y, points)
-            ) {
-                room.createConstructionSite(x, y, STRUCTURE_TOWER);
-            }
-        } else if (type === "E") {
-            if (
-                !room.lookForAt(LOOK_STRUCTURES, x, y).some(s => s.structureType === STRUCTURE_EXTENSION) &&
-                !room.lookForAt(LOOK_CONSTRUCTION_SITES, x, y).some(s => s.structureType === STRUCTURE_EXTENSION) &&
-                isPathAccessible(room, x, y, points)
-            ) {
-                room.createConstructionSite(x, y, STRUCTURE_EXTENSION);
-            }
-        } else if (type === "route") {
-            if (
-                !room.lookForAt(LOOK_STRUCTURES, x, y).length &&
-                !room.lookForAt(LOOK_CONSTRUCTION_SITES, x, y).length &&
-                isPathAccessible(room, x, y, points)
-            ) {
-                room.createConstructionSite(x, y, STRUCTURE_ROAD);
+        // Layout autour du spawn
+        for (const part of donutLayout) {
+            const x = spawn.pos.x + part.dx;
+            const y = spawn.pos.y + part.dy;
+            if (x > 1 && x < 48 && y > 1 && y < 48) {
+                plan.push({ x, y, type: part.type });
+                if (part.type !== STRUCTURE_ROAD) {
+                    plan.push({ x, y, type: STRUCTURE_RAMPART });
+                }
             }
         }
-    }
-}
 
-module.exports = {
-    planBase,
-    LAYOUT
+        // Containers à portée des sources
+        for (const source of sources) {
+            const nearby = utils.getEmptySpotsAround(source.pos, 1);
+            if (nearby.length > 0) {
+                const pos = nearby[0];
+                plan.push({ x: pos.x, y: pos.y, type: STRUCTURE_CONTAINER });
+            }
+        }
+
+        // Container au contrôleur
+        if (controller) {
+            const near = utils.getEmptySpotsAround(controller.pos, 1)[0];
+            if (near) {
+                plan.push({ x: near.x, y: near.y, type: STRUCTURE_CONTAINER });
+            }
+        }
+
+        // Tower à côté du spawn
+        const tx = spawn.pos.x + 3;
+        const ty = spawn.pos.y;
+        if (tx < 48) {
+            plan.push({ x: tx, y: ty, type: STRUCTURE_TOWER });
+            plan.push({ x: tx, y: ty, type: STRUCTURE_RAMPART });
+        }
+
+        // Routes spawn <-> controller et spawn <-> sources
+        if (controller) {
+            const path = room.findPath(spawn.pos, controller.pos, { ignoreCreeps: true });
+            for (const step of path) {
+                plan.push({ x: step.x, y: step.y, type: STRUCTURE_ROAD });
+            }
+        }
+        for (const source of sources) {
+            const path = room.findPath(spawn.pos, source.pos, { ignoreCreeps: true });
+            for (const step of path) {
+                plan.push({ x: step.x, y: step.y, type: STRUCTURE_ROAD });
+            }
+        }
+
+        Memory.plan = Memory.plan || {};
+        Memory.plan[room.name] = plan;
+        console.log(`✅ Planification terminée pour ${room.name} avec ${plan.length} éléments.`);
+    }
 };

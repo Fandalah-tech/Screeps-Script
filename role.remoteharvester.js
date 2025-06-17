@@ -1,40 +1,53 @@
+// role.remoteharvester.js
+const { goToParking } = require('module.utils');
+
 module.exports = {
     run: function(creep) {
-        // Aller dans la remote room si besoin
-        if (creep.room.name !== creep.memory.targetRoom) {
-            creep.moveTo(new RoomPosition(25, 25, creep.memory.targetRoom), {reusePath: 10});
+        if (!creep.memory.sourceId || !creep.memory.containerId) {
+            // Recherche d'une source avec un container construit dans remote room
+            const targetRoom = Game.rooms[creep.memory.remoteRoom];
+            if (!targetRoom) return creep.moveTo(new RoomPosition(25, 25, creep.memory.remoteRoom));
+
+            const containers = targetRoom.find(FIND_STRUCTURES, {
+                filter: s => s.structureType === STRUCTURE_CONTAINER
+            });
+
+            for (let container of containers) {
+                const sources = container.pos.findInRange(FIND_SOURCES, 1);
+                if (sources.length > 0) {
+                    const taken = _.some(Game.creeps, c =>
+                        c.name !== creep.name &&
+                        c.memory.role === 'remoteharvester' &&
+                        c.memory.containerId === container.id
+                    );
+                    if (!taken) {
+                        creep.memory.sourceId = sources[0].id;
+                        creep.memory.containerId = container.id;
+                        break;
+                    }
+                }
+            }
+
+            if (!creep.memory.containerId) {
+                goToParking(creep, { role: 'remoteharvester' });
+                return;
+            }
+        }
+
+        const source = Game.getObjectById(creep.memory.sourceId);
+        const container = Game.getObjectById(creep.memory.containerId);
+
+        if (!source || !container) {
+            delete creep.memory.sourceId;
+            delete creep.memory.containerId;
             return;
         }
 
-        let source = Game.getObjectById(creep.memory.sourceId);
-        let container = Game.getObjectById(creep.memory.containerId);
+        if (!creep.pos.isEqualTo(container.pos)) {
+            creep.moveTo(container.pos, { visualizePathStyle: { stroke: '#00ff88' } });
+            return;
+        }
 
-        // Si pas plein, mine la source
-        if (creep.store.getFreeCapacity() > 0) {
-            if (creep.harvest(source) === ERR_NOT_IN_RANGE) {
-                creep.moveTo(source, {reusePath: 10});
-            }
-        }
-        // Si plein, dépose dans le container (ou si déjà dessus, attends de vider)
-        else {
-            if (creep.transfer(container, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-                creep.moveTo(container, {reusePath: 10});
-            }
-        }
+        creep.harvest(source);
     }
 };
-
-/* MANUAL SPAWN
-Game.spawns['Spawn1'].spawnCreep(
-    [WORK, WORK, CARRY, MOVE, MOVE],
-    '🌐⛏️1003',
-    {
-        memory: {
-            role: 'remoteHarvester',
-            targetRoom: 'E28S16',
-            sourceId: '6845d068b4a6e60029b24f42',
-            containerId: '684d6a4be189a20028779a11'
-        }
-    }
-);
-*/
