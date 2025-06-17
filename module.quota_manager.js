@@ -10,7 +10,7 @@ module.exports = {
 
         const baseQuotas = {
             harvester: 2,
-            superharvester: 2,
+            superharvester: require('module.utils').getAvailableSuperHarvesterContainers(room).length,
             transporter: 2,
             builder: 2,
             upgrader: 2,

@@ -15,6 +15,7 @@ module.exports = {
             creep.say('🚧 build');
         }
 
+        // Mode "build"
         if (creep.memory.working) {
             const targets = creep.room.find(FIND_CONSTRUCTION_SITES);
             if (targets.length > 0) {
@@ -24,7 +25,7 @@ module.exports = {
                 }
                 return;
             } else {
-                // Recycle comme upgrader si rien à construire
+                // Si rien à construire, recycle comme upgrader
                 if (creep.upgradeController(creep.room.controller) === ERR_NOT_IN_RANGE) {
                     creep.moveTo(creep.room.controller, { visualizePathStyle: { stroke: '#aaaaaa' } });
                 }
@@ -32,8 +33,8 @@ module.exports = {
             }
         }
 
-        // === Recharge ===
-        let sources = creep.room.find(FIND_STRUCTURES, {
+        // Mode "recharge"
+        const sources = creep.room.find(FIND_STRUCTURES, {
             filter: s => (s.structureType === STRUCTURE_CONTAINER || s.structureType === STRUCTURE_STORAGE) &&
                          s.store[RESOURCE_ENERGY] > 0
         });
@@ -43,7 +44,18 @@ module.exports = {
                 creep.moveTo(sources[0], { visualizePathStyle: { stroke: '#ffaa00' } });
             }
         } else {
-            goToParking(creep, { role: 'builder' });
+            // Pickup énergie au sol si pas de container/storage
+            const dropped = creep.room.find(FIND_DROPPED_RESOURCES, {
+                filter: r => r.resourceType === RESOURCE_ENERGY && r.amount > 0
+            });
+            if (dropped.length > 0) {
+                dropped.sort((a, b) => b.amount - a.amount);
+                if (creep.pickup(dropped[0]) === ERR_NOT_IN_RANGE) {
+                    creep.moveTo(dropped[0], { visualizePathStyle: { stroke: '#ffaa00' } });
+                }
+            } else {
+                goToParking(creep, { role: 'builder' });
+            }
         }
     }
 };

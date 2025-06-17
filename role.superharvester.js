@@ -1,43 +1,23 @@
 // role.superharvester.js
-const { getFreeSpacesAroundSource, goToParking } = require('module.utils');
+const { assignMiningSlot, goToParking } = require('module.utils');
 
 module.exports = {
     run: function(creep) {
-        // Si le creep n'a pas de WORK, il est inutile
+        // Vérifie qu'il a du WORK (sinon, park)
         if (creep.getActiveBodyparts(WORK) === 0) {
             creep.say('❌ no WORK');
             goToParking(creep, { role: 'superharvester' });
             return;
         }
 
-        // Assign source + position
+        // Attribution d'un slot optimal autour d'une source
         if (!creep.memory.sourceId || !creep.memory.targetPos) {
-            const sources = creep.room.find(FIND_SOURCES);
-            for (let source of sources) {
-                const spots = getFreeSpacesAroundSource(source);
-                for (let pos of spots) {
-                    const taken = _.some(Game.creeps, c =>
-                        c.name !== creep.name &&
-                        c.memory.role === 'superharvester' &&
-                        c.memory.targetPos &&
-                        c.memory.targetPos.x === pos.x &&
-                        c.memory.targetPos.y === pos.y &&
-                        c.memory.sourceId === source.id
-                    );
-                    if (!taken) {
-                        creep.memory.sourceId = source.id;
-                        creep.memory.targetPos = { x: pos.x, y: pos.y, roomName: source.room.name };
-                        break;
-                    }
-                }
-                if (creep.memory.sourceId) break;
+            const slotAssigned = assignMiningSlot(creep, ['superharvester']);
+            if (!slotAssigned) {
+                creep.say('❌ no slot');
+                goToParking(creep, { role: 'superharvester' });
+                return;
             }
-        }
-
-        if (!creep.memory.sourceId || !creep.memory.targetPos) {
-            creep.say('❌ no slot');
-            goToParking(creep, { role: 'superharvester' });
-            return;
         }
 
         const source = Game.getObjectById(creep.memory.sourceId);
@@ -47,12 +27,24 @@ module.exports = {
             creep.memory.targetPos.roomName
         );
 
+        // Se déplacer sur le slot assigné
         if (!creep.pos.isEqualTo(targetPos)) {
             creep.moveTo(targetPos, { visualizePathStyle: { stroke: '#00ff00' } });
             return;
         }
 
-        // Harvest si sur position et source valide
+        // Cherche s'il y a un container sous les pieds
+        const structures = creep.pos.lookFor(LOOK_STRUCTURES);
+        const container = structures.find(s => s.structureType === STRUCTURE_CONTAINER);
+
+        if (container && creep.store[RESOURCE_ENERGY] > 0) {
+            creep.transfer(container, RESOURCE_ENERGY);
+        } else if (!container && creep.store[RESOURCE_ENERGY] > 0) {
+            // Si pas de container, drop au sol (early game)
+            creep.drop(RESOURCE_ENERGY);
+        }
+
+        // Mine la source
         if (source && creep.harvest(source) === ERR_NOT_IN_RANGE) {
             creep.moveTo(source, { visualizePathStyle: { stroke: '#ffaa00' } });
         }

@@ -102,6 +102,62 @@ module.exports = {
             }
         }
         return spots;
-    }
+    },
     
+    getAvailableSuperHarvesterContainers(room) {
+        const containers = room.find(FIND_STRUCTURES, {
+            filter: s => s.structureType === STRUCTURE_CONTAINER
+        });
+    
+        // Un container est "valide" si : à côté d'une source, et pas de SU assigné
+        const sources = room.find(FIND_SOURCES);
+    
+        // Liste des containers qui ont déjà un SU affecté (en mémoire)
+        const usedContainerIds = _.map(
+            _.filter(Game.creeps, c =>
+                c.memory.role === 'superharvester' &&
+                c.memory.containerId
+            ),
+            c => c.memory.containerId
+        );
+    
+        // Liste des containers valides
+        return containers.filter(container => {
+            // Il doit être adjacent à une source
+            const nearSource = sources.some(src =>
+                Math.max(Math.abs(src.pos.x - container.pos.x), Math.abs(src.pos.y - container.pos.y)) === 1
+            );
+            // Il ne doit pas déjà être attribué
+            return nearSource && !usedContainerIds.includes(container.id);
+        });
+    },
+    
+    /**
+     * Attribue au creep le premier slot libre sur n'importe quelle source de la room,
+     * en tenant compte de tous les miners déjà affectés.
+     * Retourne true si un slot est attribué, false sinon.
+     */
+    assignMiningSlot(creep, roles = ['harvester', 'superharvester']) {
+        const sources = creep.room.find(FIND_SOURCES);
+        for (let source of sources) {
+            const spots = module.exports.getFreeSpacesAroundSource(source);
+            for (let pos of spots) {
+                const taken = _.some(Game.creeps, c =>
+                    c.name !== creep.name &&
+                    roles.includes(c.memory.role) &&
+                    c.memory.targetPos &&
+                    c.memory.targetPos.x === pos.x &&
+                    c.memory.targetPos.y === pos.y &&
+                    c.memory.sourceId === source.id
+                );
+                if (!taken) {
+                    creep.memory.sourceId = source.id;
+                    creep.memory.targetPos = { x: pos.x, y: pos.y, roomName: source.room.name };
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
 };
