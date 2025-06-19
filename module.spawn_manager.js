@@ -31,7 +31,7 @@ const spawnManager = {
         // === 🆘 Recovery mode ===
         const state = recoveryState.getRecoveryState(room);
         
-        console.log(`[SPAWN_MANAGER] Recovery state: ${state} | Creeps in room: ${creepsInRoom.length} | Energy: ${room.energyAvailable}`);
+        //console.log(`[SPAWN_MANAGER] Recovery state: ${state} | Creeps in room: ${creepsInRoom.length} | Energy: ${room.energyAvailable}`);
 
         if (state === 'critical' && room.energyAvailable >= 150) {
             const name = `H-RC-${Game.time % 1000}`;
