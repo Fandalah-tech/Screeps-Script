@@ -18,11 +18,14 @@ module.exports = {
 
         // === BENCHMARK HISTORIQUE / MILESTONES ===
         for (const room of rooms) {
-            // Tick du premier spawn repéré (seulement sur tick très bas)
-            if (Game.time < 100) {
-                const spawns = room.find(FIND_MY_SPAWNS);
-                if (spawns.length && (!Memory.benchmarks || !Memory.benchmarks[room.name] || !Memory.benchmarks[room.name].spawned)) {
-                    recordMilestone(room, "spawned");
+            // Tick du premier spawn (enregistrement tardif autorisé)
+            if (!Memory.benchmarks) Memory.benchmarks = {};
+            if (!Memory.benchmarks[room.name]) Memory.benchmarks[room.name] = {};
+            
+            if (!Memory.benchmarks[room.name].spawned) {
+                const firstSpawn = room.find(FIND_MY_SPAWNS)[0];
+                if (firstSpawn) {
+                    recordMilestone(room, "spawned", firstSpawn.creationTime || Game.time);
                 }
             }
             // Passage de RCL

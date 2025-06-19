@@ -8,28 +8,26 @@ module.exports = {
         const ctrl = room.controller;
         const rcl = ctrl ? ctrl.level : 0;
 
+        let sitesCount = room.find(FIND_CONSTRUCTION_SITES).length;
+        const maxSites = 3;
+        
         for (const entry of planned) {
-            // Ignore container avant RCL2
+            if (sitesCount >= maxSites) break;
+        
             if (entry.type === STRUCTURE_CONTAINER && rcl < 2) continue;
-
-            // Ignore tower avant RCL3
             if (entry.type === STRUCTURE_TOWER && rcl < 3) continue;
-
-            // Ignore rampart si pas encore débloqué (techniquement RCL1+ ok)
             if (entry.type === STRUCTURE_RAMPART && !ctrl) continue;
-
-            // Ajoute route spawn <-> controller dès RCL3
             if (entry.type === STRUCTURE_ROAD && rcl < 3) continue;
-
+        
             const pos = new RoomPosition(entry.x, entry.y, room.name);
-
             const existing = pos.lookFor(LOOK_STRUCTURES).filter(s => s.structureType === entry.type);
             const site = pos.lookFor(LOOK_CONSTRUCTION_SITES).filter(s => s.structureType === entry.type);
             const onRampart = entry.type === STRUCTURE_RAMPART && pos.lookFor(LOOK_STRUCTURES).some(s => s.structureType === STRUCTURE_RAMPART);
-
+        
             if (existing.length === 0 && site.length === 0 && !onRampart) {
-                room.createConstructionSite(entry.x, entry.y, entry.type);
-                return; // un à la fois
+                if (room.createConstructionSite(entry.x, entry.y, entry.type) === OK) {
+                    sitesCount++;
+                }
             }
         }
 
