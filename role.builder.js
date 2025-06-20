@@ -88,6 +88,13 @@ module.exports = {
             }
             return;
         }
+        
+        const utils = require('module.utils');
+
+        if (utils.checkFillWaitTimeout(creep, { maxTicks: 3 })) {
+            // Part avec ce qu'il a, même s'il n'est pas plein
+            // Ne retourne pas ici : laisse la suite du code le faire builder/upgrader/repair
+        }
 
         // 3. Fallback : miner une source si rien d'autre
         if (smartMiningMoveAndAction(creep, { roles: [creep.memory.role], timeout: 5 })) {

@@ -29,12 +29,20 @@ module.exports = {
         
         const ctrl = room.controller;
         const rcl = ctrl ? ctrl.level : 0;
+        
+        // 5. Superharvester : 1 par container valide (seulement à partir de RCL2+)
+        quotas.superharvester = 0;
+        let nbSHslots = 0;
+        if (rcl >= 2) {
+            nbSHslots = utils.getAvailableSuperHarvesterContainers(room).length;
+            quotas.superharvester = nbSHslots;
+        }
 
-        // 1. Harvester : 2 tout le temps (meta)
-        quotas.harvester = 2;
-        let freeSlots = 0;
-        if (Memory.miningSlots && Memory.miningSlots[room.name]) {
-            freeSlots = Memory.miningSlots[room.name].filter(s => s.role === 'generic' && !s.takenBy).length;
+        // 1. Harvester : 2 tout le temps (meta) SAUF si SH pour chaque slot
+        if (quotas.superharvester >= nbSHslots && nbSHslots > 0) {
+            quotas.harvester = 0;
+        } else {
+            quotas.harvester = 2;
         }
 
         // 2. Upgrader : 2 tout le temps (meta)
@@ -63,13 +71,6 @@ module.exports = {
             
             if (energyReserve > 500 && sites.length > 0) quotas.builder += 1;
             if (energyReserve > 1000 && sites.length > 5) quotas.builder += 1;
-        }
-
-
-        // 5. Superharvester : 1 par container valide (seulement à partir de RCL2+)
-        quotas.superharvester = 0;
-        if (rcl >= 2) {
-            quotas.superharvester = utils.getAvailableSuperHarvesterContainers(room).length;
         }
 
         // 6. Filler : 1 dès qu'au moins un container est construit (et RCL2+)

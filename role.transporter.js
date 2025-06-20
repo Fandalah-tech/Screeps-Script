@@ -43,9 +43,26 @@ module.exports = {
             goToParking(creep, { role: 'transporter' });
             return;
         }
-
+        
+        // 0. Calcul de la demande réelle
+        let energyNeeded = creep.room.find(FIND_STRUCTURES, {
+            filter: s =>
+                (s.structureType === STRUCTURE_SPAWN || s.structureType === STRUCTURE_EXTENSION)
+        }).reduce((sum, s) => sum + s.store.getFreeCapacity(RESOURCE_ENERGY), 0);
+        
+        const hasStorage = creep.room.find(FIND_STRUCTURES, {
+            filter: s => s.structureType === STRUCTURE_STORAGE
+        }).length > 0;
+        
+        // Si pas de storage, on ne prend que ce qui est nécessaire
+        if (!hasStorage) {
+            if (creep.store[RESOURCE_ENERGY] >= energyNeeded || energyNeeded === 0) {
+                creep.memory.filling = true;
+                return;
+            }
+        }
+        
         // --- Mode remplir ---
-        // 1. Containers
         let containers = creep.room.find(FIND_STRUCTURES, {
             filter: s => s.structureType === STRUCTURE_CONTAINER && s.store[RESOURCE_ENERGY] > 0
         });
@@ -71,7 +88,7 @@ module.exports = {
             return;
         }
 
-// 3. Fallback : miner une source si rien d’autre
+        // 3. Fallback : miner une source si rien d’autre
         if (creep.getActiveBodyparts(WORK) > 0) {
             if (smartMiningMoveAndAction(creep, { roles: [creep.memory.role], timeout: 5 })) {
                 return;

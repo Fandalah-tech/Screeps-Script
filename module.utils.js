@@ -479,6 +479,36 @@ function getSuperHarvesterSpotAndContainer(source, spawn, room) {
     return { shSpot, containerSpot };
 }
 
+/**
+ * Vérifie si le creep attend trop longtemps de remplir son carry sans progrès.
+ * @param {Creep} creep
+ * @param {Object} opts - { maxTicks?: number }
+ * @returns {boolean} true si le creep doit passer à l'action suivante
+ */
+function checkFillWaitTimeout(creep, opts = {}) {
+    const maxTicks = opts.maxTicks || 3;
+
+    if (!creep.memory.waiting) {
+        creep.memory.waiting = { ticks: 0, energy: creep.store[RESOURCE_ENERGY] };
+    }
+
+    // Si on n'a pas pris plus d'énergie qu'au tick précédent, on incrémente le compteur
+    if (creep.store[RESOURCE_ENERGY] <= (creep.memory.waiting.energy || 0)) {
+        creep.memory.waiting.ticks++;
+    } else {
+        // Reset le compteur si on a pris de l'énergie
+        creep.memory.waiting.ticks = 0;
+    }
+    creep.memory.waiting.energy = creep.store[RESOURCE_ENERGY];
+
+    // Si on attend depuis trop longtemps, on passe à l'action suivante
+    if (creep.memory.waiting.ticks >= maxTicks) {
+        creep.memory.waiting = undefined; // Reset la mémoire d'attente
+        return true;
+    }
+    return false;
+}
+
 
 module.exports = {
     getClosestByPath,
@@ -500,5 +530,6 @@ module.exports = {
     smartMiningMoveAndAction,
     initMiningSlots,
     releaseMiningSlotIfLeft,
-    getSuperHarvesterSpotAndContainer
+    getSuperHarvesterSpotAndContainer,
+    checkFillWaitTimeout
 };

@@ -2,6 +2,17 @@ const { smartMiningMoveAndAction } = require('module.utils');
 
 module.exports = {
     run(creep) {
+        
+        // Si un superharvester vit dans la room, suicide ce H
+        const hasSH = _.some(Game.creeps, c =>
+            c.memory.role === 'superharvester' &&
+            c.memory.room === creep.memory.room
+        );
+        if (hasSH) {
+            creep.suicide();
+            return;
+        }
+        
         // Vérifie si je squatte un slot SH alors qu'un vrai superharvester existe sur ce slot
         if (creep.memory.targetPos) {
             const isOnSHSlot = Memory.miningSlots &&
