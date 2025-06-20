@@ -49,9 +49,32 @@ module.exports = {
         });
 
         if (storages.length > 0) {
-            storages.sort((a, b) => b.store[RESOURCE_ENERGY] - a.store[RESOURCE_ENERGY]);
-            if (creep.withdraw(storages[0], RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-                creep.moveTo(storages[0], { visualizePathStyle: { stroke: '#ffaa00' } });
+            // Trouve les containers qui ne sont PAS sur une case minière réservée
+            let miningSlots = Memory.miningSlots && Memory.miningSlots[creep.room.name] || [];
+            let safeContainers = storages.filter(container => {
+                // Est-ce que ce container occupe une case minière ?
+                return !miningSlots.some(slot => slot.x === container.pos.x && slot.y === container.pos.y);
+            });
+            let targetContainer = safeContainers[0] || storages[0]; // Si aucun safe, on prend le meilleur dispo
+        
+            if (creep.withdraw(targetContainer, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+                // MoveTo sur une case adjacente si slot minier, sinon direct
+                if (miningSlots.some(slot => slot.x === targetContainer.pos.x && slot.y === targetContainer.pos.y)) {
+                    // Cherche une case libre adjacente pour se placer (hors minage)
+                    let adjacent = _.shuffle([
+                        [0, -1], [1, 0], [0, 1], [-1, 0], // orthogonal
+                        [-1, -1], [1, -1], [1, 1], [-1, 1] // diagonals si tu veux
+                    ]).map(([dx, dy]) => new RoomPosition(targetContainer.pos.x + dx, targetContainer.pos.y + dy, targetContainer.pos.roomName))
+                    .find(pos => pos.lookFor(LOOK_CREEPS).length === 0 && pos.lookFor(LOOK_TERRAIN)[0] !== 'wall');
+                    if (adjacent) {
+                        creep.moveTo(adjacent, { visualizePathStyle: { stroke: '#ffaa00' } });
+                    } else {
+                        // Pas de case libre, fait au mieux (moveTo normal)
+                        creep.moveTo(targetContainer, { visualizePathStyle: { stroke: '#ffaa00' } });
+                    }
+                } else {
+                    creep.moveTo(targetContainer, { visualizePathStyle: { stroke: '#ffaa00' } });
+                }
             }
             return;
         }

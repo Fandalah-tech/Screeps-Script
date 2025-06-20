@@ -11,6 +11,8 @@ const { initMiningSlots } = require('module.utils');
 const { drawMiningSlots } = require('module.visual_debug');
 const { drawVisualOverlay } = require('module.visual_debug');
 const showMilestones = require('commands');
+global.showMilestones = require('stats_benchmark').showMilestones;
+
 
 
 global.toggleVisualOverlay = function () {
@@ -222,7 +224,10 @@ module.exports.loop = function () {
                 const creep = creepsHere[0];
     
                 // Seulement pour les rôles éligibles
-                if (['harvester', 'upgrader', 'builder'].includes(creep.memory.role)) {
+                if (
+                    (slot.role === 'superharvester' && creep.memory.role === 'superharvester') ||
+                    (slot.role === 'generic' && ['harvester', 'upgrader', 'builder'].includes(creep.memory.role))
+                ) {
                     // Ne pas réassigner s'il a déjà une cible différente en mémoire
                     const current = creep.memory.targetPos;
                     if (current && (current.x !== slot.x || current.y !== slot.y)) continue;

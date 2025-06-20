@@ -217,7 +217,65 @@ function assignSuperHarvesterSlot(creep) {
 }
 
 
+function smartMiningMoveAndAction(creep, opts = {}) {
+    const tp = creep.memory.targetPos;
+    if (!tp || typeof tp.x !== "number" || typeof tp.y !== "number") {
+        return false;
+    }
 
+    // Sur la tuile cible
+    if (creep.pos.x === tp.x && creep.pos.y === tp.y) {
+        const source = Game.getObjectById(creep.memory.sourceId);
+        if (!source) return false;
+
+        const hasWorkPart = creep.body.some(p => p.type === WORK && p.hits > 0);
+        if (hasWorkPart) {
+            const result = creep.harvest(source);
+
+            // Si la source est vide ET le creep n'est pas un superharvester
+            if (result === ERR_NOT_ENOUGH_RESOURCES && creep.memory.role !== 'superharvester') {
+                // Libère immédiatement son slot (même si aucune autre source n'est pleine)
+                require('module.utils').releaseMiningSlot(creep);
+                delete creep.memory.targetPos;
+                delete creep.memory.sourceId;
+                delete creep.memory.mining;
+                // Recherche immédiate d'un nouveau slot minier libre sur une autre source
+                const roomSlots = Memory.miningSlots && Memory.miningSlots[creep.room.name];
+                if (roomSlots) {
+                    // Cherche une autre source avec un slot libre (role 'generic', pas pris)
+                    const newSlot = roomSlots.find(slot =>
+                        slot.sourceId !== source.id &&
+                        slot.role === 'generic' &&
+                        !slot.takenBy
+                    );
+                    if (newSlot) {
+                        // Prend le nouveau slot immédiatement
+                        newSlot.takenBy = creep.name;
+                        creep.memory.targetPos = { x: newSlot.x, y: newSlot.y, roomName: creep.room.name };
+                        creep.memory.sourceId = newSlot.sourceId;
+                        creep.memory.mining = {
+                            sourceId: newSlot.sourceId,
+                            targetPos: { x: newSlot.x, y: newSlot.y, roomName: creep.room.name },
+                            since: Game.time
+                        };
+                        // MoveTo sur la nouvelle tuile
+                        creep.moveTo(newSlot.x, newSlot.y, { visualizePathStyle: { stroke: '#00ff00' } });
+                        return true;
+                    }
+                }
+                // Sinon, rien à faire ce tick
+                return false;
+            }
+            // Sinon, action normale
+            return true;
+        }
+        return false;
+    } else {
+        // Si pas encore sur la case minage, y aller !
+        creep.moveTo(tp.x, tp.y, { visualizePathStyle: { stroke: '#ffff00' } });
+        return true;
+    }
+}
 
 
 function assignMiningSlotFromMemory(creep) {
@@ -281,120 +339,7 @@ function releaseMiningSlot(creep) {
 }
 
 
-function smartMiningMoveAndAction(creep, options = {}) {
-    //console.log(`[debug] ${creep.name} enters smartMiningMoveAndAction`);
 
-    const timeout = options.timeout || 5;
-
-    // 🔁 Unifie les sources possibles de position et initialise la mémoire si manquante
-    let tp = creep.memory.targetPos;
-    let mining = creep.memory.mining;
-
-    if (!tp && mining && mining.targetPos) {
-        tp = mining.targetPos;
-        creep.memory.targetPos = tp;
-    }
-
-    if (!mining && tp) {
-        mining = { targetPos: tp, since: Game.time };
-        creep.memory.mining = mining;
-    }
-
-    // 🔁 Nettoyage si mémoire corrompue
-    if (tp && (typeof tp.x !== 'number' || typeof tp.y !== 'number')) {
-        console.log(`⚠️ ${creep.name} memory.targetPos corrompue, reset`);
-        delete creep.memory.targetPos;
-        delete creep.memory.sourceId;
-        delete creep.memory.mining;
-        return false;
-    }
-
-    // ✅ Si le creep est bien positionné
-    if (tp && creep.pos.isEqualTo(new RoomPosition(tp.x, tp.y, tp.roomName))) {
-        const source = Game.getObjectById(creep.memory.sourceId);
-
-        if (!source) {
-            console.log(`⚠️ ${creep.name} sur la tuile mais source introuvable → reset`);
-            delete creep.memory.targetPos;
-            delete creep.memory.sourceId;
-            delete creep.memory.mining;
-            return false;
-        }
-
-        const hasWorkPart = creep.body.some(p => p.type === WORK && p.hits > 0);
-        if (hasWorkPart) {
-            const result = creep.harvest(source);
-            //console.log(`⛏️ ${creep.name} harvesting ${source.id} → ${result}`);
-        }
-
-        const target = creep.pos.findInRange(FIND_STRUCTURES, 1, {
-            filter: s =>
-                (s.structureType === STRUCTURE_CONTAINER ||
-                 s.structureType === STRUCTURE_EXTENSION ||
-                 s.structureType === STRUCTURE_SPAWN) &&
-                s.store.getFreeCapacity(RESOURCE_ENERGY) > 0
-        })[0];
-        
-        if (target && creep.store[RESOURCE_ENERGY] > 0) {
-            const role = creep.memory.role;
-            const shouldTransfer =
-                (role === 'harvester' || role === 'superharvester' || role === 'transporter' || role === 'filler');
-        
-            if (shouldTransfer) {
-                const result = creep.transfer(target, RESOURCE_ENERGY);
-                //console.log(`📦 ${creep.name} transferring → ${result}`);
-            } else {
-                console.log(`📦 ${creep.name} conserve son énergie (no transfer)`);
-            }
-        }
-
-
-        return true;
-    }
-
-    // ⏱️ Si trop de ticks bloqué
-    if (mining && mining.since && Game.time - mining.since > timeout) {
-        console.log(`⚠️ ${creep.name} stuck too long → resetting mining target`);
-        delete creep.memory.targetPos;
-        delete creep.memory.sourceId;
-        delete creep.memory.mining;
-        return false;
-    }
-
-    // 📌 Affectation initiale
-    if (!creep.memory.targetPos || !creep.memory.sourceId) {
-        const result = assignMiningSlotFromMemory(creep);
-        if (!result) return false;
-
-        creep.memory.mining = {
-            since: Game.time,
-            targetPos: result.targetPos
-        };
-        creep.memory.targetPos = result.targetPos;
-        creep.memory.sourceId = result.sourceId;
-    }
-
-    // 🧭 Mouvement vers la tuile
-    if (creep.memory.targetPos) {
-        creep.moveTo(
-            new RoomPosition(
-                creep.memory.targetPos.x,
-                creep.memory.targetPos.y,
-                creep.memory.targetPos.roomName
-            ),
-            { visualizePathStyle: { stroke: '#ffaa00' } }
-        );
-
-        if (!creep.memory.mining || !creep.memory.mining.since) {
-            creep.memory.mining = {
-                since: Game.time,
-                targetPos: creep.memory.targetPos
-            };
-        }
-    }
-
-    return true;
-}
 
 
 

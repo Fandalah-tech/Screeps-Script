@@ -8,8 +8,8 @@ function recordMilestone(room, key, value) {
     }
 }
 
-module.exports = {
-    run() {
+
+function run() {
         const cpuUsed = Game.cpu.getUsed().toFixed(2);
         const bucket = Game.cpu.bucket;
         const rooms = Object.values(Game.rooms).filter(r => r.controller && r.controller.my);
@@ -82,5 +82,24 @@ module.exports = {
                 console.log(`🏠 ${r.name} | RCL: ${r.controller.level} (${r.controller.progress}/${r.controller.progressTotal})`);
             });
         }
+};
+
+function showMilestones() {
+    if (!Memory.benchmarks) {
+        console.log("Aucun milestone enregistré.");
+        return;
     }
+    for (const roomName in Memory.benchmarks) {
+        const milestones = Memory.benchmarks[roomName];
+        let log = `📈 Milestones pour ${roomName}: `;
+        for (const key of Object.keys(milestones)) {
+            log += `${key}:T${milestones[key]}  `;
+        }
+        console.log(log);
+    }
+};
+
+module.exports = {
+    run,
+    showMilestones
 };
