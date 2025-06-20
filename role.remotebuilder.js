@@ -1,3 +1,4 @@
+// role.remotebuilder.js
 const { goToParking } = require('module.utils');
 
 function getPriorityConstructionSite(creep) {
@@ -38,11 +39,13 @@ module.exports = {
         const targetRoom = creep.memory.remoteRoom;
         if (!targetRoom) return goToParking(creep, { role: 'remotebuilder' });
 
+        // Aller dans la remote si besoin
         if (creep.room.name !== targetRoom) {
             creep.moveTo(new RoomPosition(25, 25, targetRoom), { visualizePathStyle: { stroke: '#aaaaaa' } });
             return;
         }
 
+        // --- Mode travail : construire (ou upgrade en fallback)
         if (creep.memory.working) {
             const target = getPriorityConstructionSite(creep);
 
@@ -66,10 +69,10 @@ module.exports = {
         }
 
         // --- Recharge énergie ---
+        // 1. Prendre dans un container local
         const containers = creep.room.find(FIND_STRUCTURES, {
             filter: s => s.structureType === STRUCTURE_CONTAINER && s.store[RESOURCE_ENERGY] > 0
         });
-
         if (containers.length > 0) {
             containers.sort((a, b) => b.store[RESOURCE_ENERGY] - a.store[RESOURCE_ENERGY]);
             if (creep.withdraw(containers[0], RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
@@ -78,6 +81,29 @@ module.exports = {
             return;
         }
 
+        // 2. Ramasser énergie au sol
+        const dropped = creep.room.find(FIND_DROPPED_RESOURCES, {
+            filter: r => r.resourceType === RESOURCE_ENERGY && r.amount > 50
+        });
+        if (dropped.length > 0) {
+            dropped.sort((a, b) => b.amount - a.amount);
+            if (creep.pickup(dropped[0]) === ERR_NOT_IN_RANGE) {
+                creep.moveTo(dropped[0], { visualizePathStyle: { stroke: '#ffaa00' } });
+            }
+            return;
+        }
+
+        // 3. Miner une source (en remote)
+        const sources = creep.room.find(FIND_SOURCES);
+        if (sources.length > 0) {
+            // Option : prioriser une source sans harvester dessus, mais simple suffit pour début
+            if (creep.harvest(sources[0]) === ERR_NOT_IN_RANGE) {
+                creep.moveTo(sources[0], { visualizePathStyle: { stroke: '#00ff00' } });
+            }
+            return;
+        }
+
+        // 4. Rien à faire : park
         goToParking(creep, { role: 'remotebuilder' });
     }
 };

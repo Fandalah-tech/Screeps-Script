@@ -6,7 +6,7 @@ module.exports = {
         if (!Memory.exploration || !Memory.exploration[room.name]) return;
 
         const controllerLevel = room.controller.level;
-        const maxRemotes = controllerLevel >= 5 ? 3 : controllerLevel >= 4 ? 2 : controllerLevel >= 3 ? 1 : 0;
+        const maxRemotes = controllerLevel >= 5 ? 3 : controllerLevel >= 4 ? 2 : controllerLevel >= 2 ? 1 : 0;
 
         let remotes = Memory.remoteMining[room.name] || [];
 

@@ -4,7 +4,7 @@ const explorationManager = {
     run(room) {
         if (!room.controller || !room.controller.my) return;
         if (!Memory.exploration) Memory.exploration = {};
-
+    
         const exits = Game.map.describeExits(room.name);
         for (const dir in exits) {
             const exitRoom = exits[dir];
@@ -19,6 +19,23 @@ const explorationManager = {
                 }
             }
         }
+    
+        // === NOUVEAU : met à jour la liste des rooms voisines explorées ===
+        const rooms = [];
+        for (const dir in exits) {
+            const neighbor = exits[dir];
+            if (Memory.exploration[neighbor] && Memory.exploration[neighbor].explored) {
+                rooms.push({
+                    name: neighbor,
+                    sources: Memory.exploration[neighbor].sources || []
+                });
+            }
+        }
+        // PATCH ANTI-CRASH ICI
+        if (!Memory.exploration[room.name]) {
+            Memory.exploration[room.name] = { explored: true, accessibleFrom: [] };
+        }
+        Memory.exploration[room.name].rooms = rooms;
     },
 
     recordVisibility(roomName) {
@@ -28,6 +45,12 @@ const explorationManager = {
             accessibleFrom: []
         };
         Memory.exploration[roomName].explored = true;
+
+        // === NOUVEAU : stocke les sources de la room explorée ===
+        const room = Game.rooms[roomName];
+        if (room) {
+            Memory.exploration[roomName].sources = room.find(FIND_SOURCES).map(src => src.id);
+        }
     },
 
     getUnexploredRooms(fromRoom) {

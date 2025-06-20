@@ -104,14 +104,33 @@ module.exports = {
                 quotas.repairer = rcl >= 3 ? 2 : 1;
             }
         }
-
-        // --- Ajout d'autres quotas à RC3+ si besoin
-        // quotas.scout = ...
         
-        if (room.find(FIND_HOSTILE_CREEPS).length > 0) {
-            quotas.builder = 0;
-            quotas.upgrader = 0;
+        // 8. Scout : toujours 1 si la room est principale et RCL2+ (ou + tôt si tu veux)
+        const exploration = Memory.exploration && Memory.exploration[room.name];
+        const unexplored =
+            exploration && exploration.rooms
+                ? exploration.rooms.filter(r => !r.sources || r.sources.length === 0)
+                : [];
+        quotas.scout = 0;
+        if (
+            room.controller.level >= 2 &&
+            room.find(FIND_MY_SPAWNS).some(s => s.name === 'Spawn1') &&
+            unexplored.length > 0
+        ) {
+            quotas.scout = 1;
         }
+        
+         // === Remote mining automatique ===
+        const remotes = Memory.remoteMining && Memory.remoteMining[room.name] || [];
+        for (const remote of remotes) {
+            // Pour l’instant : on spawn 1 remotebuilder par remote tant que le container n’est pas détecté
+            // Tu peux faire plus fin avec des statuts selon l’avancement du remote
+            quotas.remotebuilder = (quotas.remotebuilder || 0) + 1;
+            // Optionnel (après construction du container, tu peux automatiser avec un status) :
+            quotas.remoteharvester = (quotas.remoteharvester || 0) + 1;
+            quotas.remotetransporter = (quotas.remotetransporter || 0) + 1;
+        }       
+                
 
         return quotas;
     }

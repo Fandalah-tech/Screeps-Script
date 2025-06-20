@@ -109,6 +109,18 @@ const spawnManager = {
                     role,
                     room: room.name,
                 };
+                // Patch : Ajoute la remoteRoom si besoin
+                if (role.startsWith("remote") && role !== "remoteharvester" && role !== "remotebuilder" && role !== "remotetransporter") {
+                    // rien à faire ici (si tu as d'autres rôles remote custom)
+                }
+                if (["remotebuilder","remoteharvester","remotetransporter"].includes(role)) {
+                    // On va chercher la remote cible dans Memory.remoteMining
+                    const remotes = Memory.remoteMining && Memory.remoteMining[room.name];
+                    if (remotes && remotes.length > 0) {
+                        // On prend la première remote "pending"
+                        memory.remoteRoom = remotes[0].room;
+                    }
+                }
 
                 const result = spawns[0].spawnCreep(body, name, { memory });
                 if (result === OK) return; // Un spawn à la fois par tick
